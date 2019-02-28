@@ -1,0 +1,58 @@
+name:                h-json-schema-data
+version:             0.0.0.1
+github:              "isomarcte/json-schema"
+license:             BSD3
+author:              "David Strawn"
+maintainer:          "isomarcte@gmail.com"
+copyright:           "2019 David Strawn"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+description:         Please see the README on GitHub at <https://github.com/isomarcte/j-json-schema-data#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- aeson
+- bytestring
+- containers
+- nonempty-containers
+- text
+- unordered-containers
+- uri-bytestring
+
+ghc-options:
+  - -Wall
+  - -Werror
+
+library:
+  source-dirs: src
+
+default-extensions:
+  - DeriveGeneric
+  - GADTs
+  - GeneralizedNewtypeDeriving
+  - NamedFieldPuns
+  - NoImplicitPrelude
+  - OverloadedLists
+  - OverloadedStrings
+  - StandaloneDeriving
+  - StrictData
+
+tests:
+  h-json-schema-data-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -fhpc
+    dependencies:
+    - h-json-schema-data
+    - tasty
+    - tasty-hunit
