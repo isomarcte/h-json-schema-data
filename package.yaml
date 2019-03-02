@@ -1,6 +1,6 @@
 name:                h-json-schema-data
 version:             0.0.0.1
-github:              "isomarcte/json-schema"
+github:              "isomarcte/h-json-schema-data"
 license:             BSD3
 author:              "David Strawn"
 maintainer:          "isomarcte@gmail.com"
@@ -34,6 +34,7 @@ library:
 
 default-extensions:
   - DeriveGeneric
+  - EmptyDataDecls
   - GADTs
   - GeneralizedNewtypeDeriving
   - NamedFieldPuns
@@ -51,7 +52,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -fhpc
     dependencies:
     - h-json-schema-data
     - tasty

@@ -1,20 +1,15 @@
 module Unit.ExampleSchemas (schemas) where
 
-import Data.Json.Schema (JsonSchema(..),
-                         SchemaRef(..),
-                         IdRef(..),
-                         RelativeURI(..),
-                         AbsoluteURI(..),
-                         SchemaType(..),
-                         TypeEnumeration(..),
-                         parseRelativeOrAbsoluteURI
-                        )
+import Control.Applicative (pure)
 import Data.ByteString (ByteString)
+import Data.Function (($), (.))
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (Maybe(..))
 
-import qualified URI.ByteString as UB
+import qualified Data.Json.JsonSchema as DJJ
+import qualified Data.Text as DT
 
-schemas :: NonEmpty (ByteString, JsonSchema)
+schemas :: NonEmpty (ByteString, DJJ.JsonSchema)
 schemas =
   ("{\
   \\"$schema\": \"http://json-schema.org/draft-07/schema#\",\
@@ -66,18 +61,23 @@ schemas =
   \}\
   \},\
   \\"required\": [ \"productId\", \"productName\", \"price\" ]}",
-   ObjectSchema { schemaRef = pure jsonSchemaDraft07SchemaRef,
-                  idRef  = pure . unsafeIdRefParse $ "http://example.com/product.schema.json",
-                  typeKey = pure $ SchemaTypeSingle TypeObject,
-                  enum = Nothing
+   DJJ.ObjectSchema $ DJJ.JsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
+                                            , DJJ.idRef  = pure "http://example.com/product.schema.json"
+                                            , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
+                                            , DJJ.enumKey = Nothing
+                                            , DJJ.constKey = Nothing
+                                            , DJJ.multipleOfKey = Nothing
+                                            , DJJ.maximumKey = Nothing
+                                            , DJJ.exclusiveMaximumKey = Nothing
+                                            , DJJ.minimumKey = Nothing
+                                            , DJJ.exclusiveMinimumKey = Nothing
+                                            , DJJ.maxLengthKey = Nothing
+                                            , DJJ.minLengthKey = Nothing
+                                            , DJJ.patternKey = Nothing
+                                            , DJJ.itemsKey = Nothing
+                                            , DJJ.additionalItemsKey = Nothing
+                                            , DJJ.maxItemsKey = Nothing
                 }) :| []
 
-unsafeIdRefParse :: ByteString -> IdRef
-unsafeIdRefParse = either RelativeIdRef AbsoluteIdRef . unsafeURIParse
-
-unsafeURIParse :: ByteString -> Either RelativeURI AbsoluteURI
-unsafeURIParse = either (error . show) id . parseRelativeOrAbsoluteURI
-
-jsonSchemaDraft07SchemaRef :: SchemaRef
-jsonSchemaDraft07SchemaRef =
-  either (error . show) SchemaRef . unsafeURIParse $ "http://json-schema.org/draft-07/schema#"
+jsonSchemaDraft07SchemaRef :: DT.Text
+jsonSchemaDraft07SchemaRef = "http://json-schema.org/draft-07/schema#"
