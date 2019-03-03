@@ -56,6 +56,13 @@ data JsonObjectSchema where
                       , itemsKey :: Maybe ItemsKey
                       , additionalItemsKey :: Maybe AdditionalItemsKey
                       , maxItemsKey :: Maybe Word
+                      , minItemsKey :: Maybe Word
+                      , uniqueItemsKey :: Maybe Bool
+                      , containsKey :: Maybe JsonSchema
+                      , maxPropertiesKey :: Maybe Word
+                      , minPropertiesKey :: Maybe Word
+                      , requiredKey :: Maybe [DT.Text]
+                      , propertiesKey :: Maybe (DMS.Map DT.Text JsonSchema)
                       } -> JsonObjectSchema
 
 deriving instance Eq JsonObjectSchema
@@ -101,7 +108,8 @@ keyRemappingsL =
     keyList :: [(DT.Text, DT.Text)]
     keyList = fmap toTuple ["enum", "const", "multipleOf", "maximum", "exclusiveMaximum",
                             "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern",
-                            "type", "items", "additionalItems", "maxItems"
+                            "type", "items", "additionalItems", "maxItems", "minItems", "uniqueItems",
+                            "contains", "maxProperties", "minProperties", "required", "properties"
                            ]
 
 fromKeyRemappings :: DMS.Map DT.Text DT.Text

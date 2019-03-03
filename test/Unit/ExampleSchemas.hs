@@ -1,10 +1,9 @@
 module Unit.ExampleSchemas (schemas) where
 
-import Control.Applicative (pure)
+import Control.Applicative (Alternative(..), Applicative(..))
 import Data.ByteString (ByteString)
 import Data.Function (($), (.))
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (Maybe(..))
 
 import qualified Data.Json.JsonSchema as DJJ
 import qualified Data.Text as DT
@@ -64,19 +63,26 @@ schemas =
    DJJ.ObjectSchema $ DJJ.JsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
                                             , DJJ.idRef  = pure "http://example.com/product.schema.json"
                                             , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
-                                            , DJJ.enumKey = Nothing
-                                            , DJJ.constKey = Nothing
-                                            , DJJ.multipleOfKey = Nothing
-                                            , DJJ.maximumKey = Nothing
-                                            , DJJ.exclusiveMaximumKey = Nothing
-                                            , DJJ.minimumKey = Nothing
-                                            , DJJ.exclusiveMinimumKey = Nothing
-                                            , DJJ.maxLengthKey = Nothing
-                                            , DJJ.minLengthKey = Nothing
-                                            , DJJ.patternKey = Nothing
-                                            , DJJ.itemsKey = Nothing
-                                            , DJJ.additionalItemsKey = Nothing
-                                            , DJJ.maxItemsKey = Nothing
+                                            , DJJ.enumKey = empty
+                                            , DJJ.constKey = empty
+                                            , DJJ.multipleOfKey = empty
+                                            , DJJ.maximumKey = empty
+                                            , DJJ.exclusiveMaximumKey = empty
+                                            , DJJ.minimumKey = empty
+                                            , DJJ.exclusiveMinimumKey = empty
+                                            , DJJ.maxLengthKey = empty
+                                            , DJJ.minLengthKey = empty
+                                            , DJJ.patternKey = empty
+                                            , DJJ.itemsKey = empty
+                                            , DJJ.additionalItemsKey = empty
+                                            , DJJ.maxItemsKey = empty
+                                            , DJJ.minItemsKey = empty
+                                            , DJJ.uniqueItemsKey = empty
+                                            , DJJ.containsKey = empty
+                                            , DJJ.maxPropertiesKey = empty
+                                            , DJJ.minPropertiesKey = empty
+                                            , DJJ.requiredKey = empty
+                                            , DJJ.propertiesKey = empty
                 }) :| []
 
 jsonSchemaDraft07SchemaRef :: DT.Text
