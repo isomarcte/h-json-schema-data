@@ -4,18 +4,20 @@ module Unit.ExampleSchemas (TestComparison(..)
 
 import Control.Applicative (Alternative(..), Applicative(..))
 import Control.Monad (foldM, return)
+import Data.Either (Either, either)
 import Data.Eq (Eq)
-import Data.Foldable (foldl)
-import Data.Function (($), (.))
+import Data.Function (($), (.), id)
 import Data.Functor (fmap)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (Maybe)
 import Data.Monoid ((<>))
 import Data.Ord (Ord)
+import Data.String (String)
 import Data.Traversable (traverse)
 import GHC.Err (error)
+import System.FilePath.Posix (takeFileName)
 import System.IO (IO, FilePath)
 import Text.Show (Show(..))
+import Data.Maybe (Maybe(..))
 
 import qualified Data.Aeson as DA
 import qualified Data.Json.JsonSchema as DJJ
@@ -26,7 +28,7 @@ import qualified Paths_h_json_schema_data as Paths
 data TestComparison a = TestComparison {actual :: a, expected :: a} deriving (Show, Eq)
 
 schemaFilePaths :: IO (NonEmpty FilePath)
-schemaFilePaths = traverse Paths.getDataFileName ["schema0.json"]
+schemaFilePaths = traverse Paths.getDataFileName $ fmap ("data/test/example/" <>) ["schema0.json"]
 
 schemaFileMap :: IO (DMS.Map FilePath DJJ.JsonSchema)
 schemaFileMap = do
@@ -35,12 +37,15 @@ schemaFileMap = do
   where
     f :: DMS.Map FilePath DJJ.JsonSchema -> FilePath -> IO (DMS.Map FilePath DJJ.JsonSchema)
     f acc value = do
-      mjs <- (DA.decodeFileStrict' value) :: IO (Maybe DJJ.JsonSchema)
-      js <- foldl pure (error $ "Unable to decode JsonSchema in file: " <> value) mjs
-      return $ DMS.insert value js acc
+      mjs <- DA.eitherDecodeFileStrict' value :: IO (Either String DJJ.JsonSchema)
+      let js = either (\e -> error $ "Unable to decode JsonSchema in file: " <> value <> "\nError: " <> e) id mjs
+      return $ DMS.insert (takeFileName value) js acc
 
 lookupOrError :: (Ord a, Show a) => a -> DMS.Map a b -> b
-lookupOrError a m = foldl pure (error $ "Unable to find " <> show a <> " in map") $ DMS.lookup a m
+lookupOrError a m =
+  case DMS.lookup a m of
+    Just v -> v
+    _ -> error $ "Unable to find " <> show a <> " in map\nMap Keys" <> show (DMS.keysSet m)
 
 schemas :: IO (NonEmpty (TestComparison DJJ.JsonSchema))
 schemas =

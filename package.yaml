@@ -62,5 +62,6 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - h-json-schema-data
+    - filepath
     - tasty
     - tasty-hunit
