@@ -1,66 +1,55 @@
-module Unit.ExampleSchemas (schemas) where
+module Unit.ExampleSchemas (TestComparison(..)
+                           , schemas
+                           ) where
 
 import Control.Applicative (Alternative(..), Applicative(..))
-import Data.ByteString (ByteString)
+import Control.Monad (foldM, return)
+import Data.Eq (Eq)
+import Data.Foldable (foldl)
 import Data.Function (($), (.))
+import Data.Functor (fmap)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (Maybe)
+import Data.Monoid ((<>))
+import Data.Ord (Ord)
+import Data.Traversable (traverse)
+import GHC.Err (error)
+import System.IO (IO, FilePath)
+import Text.Show (Show(..))
 
+import qualified Data.Aeson as DA
 import qualified Data.Json.JsonSchema as DJJ
+import qualified Data.Map.Strict as DMS
 import qualified Data.Text as DT
+import qualified Paths_h_json_schema_data as Paths
 
-schemas :: NonEmpty (ByteString, DJJ.JsonSchema)
+data TestComparison a = TestComparison {actual :: a, expected :: a} deriving (Show, Eq)
+
+schemaFilePaths :: IO (NonEmpty FilePath)
+schemaFilePaths = traverse Paths.getDataFileName ["schema0.json"]
+
+schemaFileMap :: IO (DMS.Map FilePath DJJ.JsonSchema)
+schemaFileMap = do
+  sfps <- schemaFilePaths
+  foldM f DMS.empty sfps
+  where
+    f :: DMS.Map FilePath DJJ.JsonSchema -> FilePath -> IO (DMS.Map FilePath DJJ.JsonSchema)
+    f acc value = do
+      mjs <- (DA.decodeFileStrict' value) :: IO (Maybe DJJ.JsonSchema)
+      js <- foldl pure (error $ "Unable to decode JsonSchema in file: " <> value) mjs
+      return $ DMS.insert value js acc
+
+lookupOrError :: (Ord a, Show a) => a -> DMS.Map a b -> b
+lookupOrError a m = foldl pure (error $ "Unable to find " <> show a <> " in map") $ DMS.lookup a m
+
+schemas :: IO (NonEmpty (TestComparison DJJ.JsonSchema))
 schemas =
-  ("{\
-  \\"$schema\": \"http://json-schema.org/draft-07/schema#\",\
-  \\"$id\": \"http://example.com/product.schema.json\",\
-  \\"title\": \"Product\",\
-  \\"description\": \"A product from Acme's catalog\",\
-  \\"type\": \"object\",\
-  \\"properties\": {\
-  \\"productId\": {\
-  \\"description\": \"The unique identifier for a product\",\
-  \\"type\": \"integer\"\
-  \},\
-  \\"productName\": {\
-  \\"description\": \"Name of the product\",\
-  \\"type\": \"string\"\
-  \},\
-  \\"price\": {\
-  \\"description\": \"The price of the product\",\
-  \\"type\": \"number\",\
-  \\"exclusiveMinimum\": 0\
-  \},\
-  \\"tags\": {\
-  \\"description\": \"Tags for the product\",\
-  \\"type\": \"array\",\
-  \\"items\": {\
-  \\"type\": \"string\"\
-  \},\
-  \\"minItems\": 1,\
-  \\"uniqueItems\": true\
-  \},\
-  \\"dimensions\": {\
-  \\"type\": \"object\",\
-  \\"properties\": {\
-  \\"length\": {\
-  \\"type\": \"number\"\
-  \},\
-  \\"width\": {\
-  \\"type\": \"number\"\
-  \},\
-  \\"height\": {\
-  \\"type\": \"number\"\
-  \}\
-  \},\
-  \\"required\": [ \"length\", \"width\", \"height\" ]\
-  \},\
-  \\"warehouseLocation\": {\
-  \\"description\": \"Coordinates of the warehouse where the product is located.\",\
-  \\"$ref\": \"https://example.com/geographical-location.schema.json\"\
-  \}\
-  \},\
-  \\"required\": [ \"productId\", \"productName\", \"price\" ]}",
-   DJJ.ObjectSchema $ DJJ.JsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
+  fmap f schemaFileMap
+  where
+    f :: DMS.Map FilePath DJJ.JsonSchema -> NonEmpty (TestComparison DJJ.JsonSchema)
+    f m =
+      TestComparison {actual = lookupOrError "schema0.json" m
+                     , expected = DJJ.ObjectSchema $ DJJ.JsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
                                             , DJJ.idRef  = pure "http://example.com/product.schema.json"
                                             , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
                                             , DJJ.enumKey = empty
@@ -83,7 +72,8 @@ schemas =
                                             , DJJ.minPropertiesKey = empty
                                             , DJJ.requiredKey = empty
                                             , DJJ.propertiesKey = empty
-                }) :| []
+                                            }
+                     } :| []
 
 jsonSchemaDraft07SchemaRef :: DT.Text
 jsonSchemaDraft07SchemaRef = "http://json-schema.org/draft-07/schema#"
