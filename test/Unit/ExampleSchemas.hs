@@ -2,7 +2,7 @@ module Unit.ExampleSchemas (TestComparison(..)
                            , schemas
                            ) where
 
-import Control.Applicative (Alternative(..), Applicative(..))
+import Control.Applicative (Applicative(..))
 import Control.Monad (foldM, return)
 import Data.Either (Either, either)
 import Data.Eq (Eq)
@@ -54,29 +54,11 @@ schemas =
     f :: DMS.Map FilePath DJJ.JsonSchema -> NonEmpty (TestComparison DJJ.JsonSchema)
     f m =
       TestComparison {actual = lookupOrError "schema0.json" m
-                     , expected = DJJ.ObjectSchema $ DJJ.JsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
+                     , expected = DJJ.ObjectSchema $ DJJ.emptyJsonObjectSchema  { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
                                             , DJJ.idRef  = pure "http://example.com/product.schema.json"
                                             , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
-                                            , DJJ.enumKey = empty
-                                            , DJJ.constKey = empty
-                                            , DJJ.multipleOfKey = empty
-                                            , DJJ.maximumKey = empty
-                                            , DJJ.exclusiveMaximumKey = empty
-                                            , DJJ.minimumKey = empty
-                                            , DJJ.exclusiveMinimumKey = empty
-                                            , DJJ.maxLengthKey = empty
-                                            , DJJ.minLengthKey = empty
-                                            , DJJ.patternKey = empty
-                                            , DJJ.itemsKey = empty
-                                            , DJJ.additionalItemsKey = empty
-                                            , DJJ.maxItemsKey = empty
-                                            , DJJ.minItemsKey = empty
-                                            , DJJ.uniqueItemsKey = empty
-                                            , DJJ.containsKey = empty
-                                            , DJJ.maxPropertiesKey = empty
-                                            , DJJ.minPropertiesKey = empty
-                                            , DJJ.requiredKey = empty
-                                            , DJJ.propertiesKey = empty
+                                            , DJJ.propertiesKey = pure . DMS.fromList $ [("productId"
+                                                                                         , DJJ.ObjectSchema $ DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJJ.TypeKey . DJJ.One $ "integer"})]
                                             }
                      } :| []
 

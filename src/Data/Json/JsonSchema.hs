@@ -3,6 +3,7 @@ module Data.Json.JsonSchema (JsonSchema(..)
                             , JsonObjectSchema(..)
                             , TypeKey(..)
                             , OneOrSome(..)
+                            , emptyJsonObjectSchema
                             ) where
 
 import Data.Bool (Bool(..))
@@ -11,7 +12,7 @@ import Data.Function (($), (.), id)
 import Data.Functor (fmap)
 import Data.Int (Int)
 import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.Maybe (Maybe, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid ((<>))
 import Data.Text as DT
 import Data.Tuple (swap)
@@ -74,6 +75,32 @@ instance DA.FromJSON JsonObjectSchema where
 
 instance DA.ToJSON JsonObjectSchema where
   toJSON = toJsonKeyMangle . DA.genericToJSON genericJsonOptions
+
+emptyJsonObjectSchema :: JsonObjectSchema
+emptyJsonObjectSchema = JsonObjectSchema { schemaRef = Nothing
+                                         , idRef = Nothing
+                                         , typeKey = Nothing
+                                         , enumKey = Nothing
+                                         , constKey = Nothing
+                                         , multipleOfKey = Nothing
+                                         , maximumKey = Nothing
+                                         , exclusiveMaximumKey = Nothing
+                                         , minimumKey = Nothing
+                                         , exclusiveMinimumKey = Nothing
+                                         , maxLengthKey = Nothing
+                                         , minLengthKey = Nothing
+                                         , patternKey = Nothing
+                                         , itemsKey = Nothing
+                                         , additionalItemsKey = Nothing
+                                         , maxItemsKey = Nothing
+                                         , minItemsKey = Nothing
+                                         , uniqueItemsKey = Nothing
+                                         , containsKey = Nothing
+                                         , maxPropertiesKey = Nothing
+                                         , minPropertiesKey = Nothing
+                                         , requiredKey = Nothing
+                                         , propertiesKey = Nothing
+                                         }
 
 data OneOrSome a where
   One :: a -> OneOrSome a
