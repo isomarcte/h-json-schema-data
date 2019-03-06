@@ -29,6 +29,9 @@ ghc-options:
   - -Wall
   - -Werror
 
+data-files:
+  - data/test/example/*.json
+
 library:
   source-dirs: src
 
@@ -47,6 +50,11 @@ default-extensions:
 tests:
   h-json-schema-data-test:
     main:                Spec.hs
+    generated-other-modules:
+    - Paths_h_json_schema_data
+    other-modules:
+    - Unit.ExampleSchemas
+    - Unit.ParseExamples
     source-dirs:         test
     ghc-options:
     - -threaded
