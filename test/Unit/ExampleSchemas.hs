@@ -5,6 +5,7 @@ module Unit.ExampleSchemas
 
 import Control.Applicative (Applicative(..))
 import Control.Monad (foldM, return)
+import Data.Bool (Bool(..))
 import Data.Either (Either, either)
 import Data.Eq (Eq)
 import Data.Function (($), (.), id)
@@ -66,7 +67,9 @@ lookupOrError a m =
       "Unable to find " <> show a <> " in map\nMap Keys" <> show (DMS.keysSet m)
 
 emptyWithTypeKey :: DT.Text -> DJJ.JsonSchema
-emptyWithTypeKey t = DJJ.ObjectSchema $ DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One t}
+emptyWithTypeKey t =
+  DJJ.ObjectSchema $
+  DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One t}
 
 schemas :: IO (NonEmpty (TestComparison DJJ.JsonSchema))
 schemas = fmap f schemaFileMap
@@ -84,10 +87,38 @@ schemas = fmap f schemaFileMap
               , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
               , DJJ.propertiesKey =
                   pure . DMS.fromList $
-                  [ ( "productId" , emptyWithTypeKey "integer")
-                  , ("productname", emptyWithTypeKey "string")
-                  , ("price", DJJ.objectSchema' (\jos -> jos {DJJ.exclusiveMinimumKey = pure 0}) $ emptyWithTypeKey "number")
+                  [ ("productId", emptyWithTypeKey "integer")
+                  , ("productName", emptyWithTypeKey "string")
+                  , ( "price"
+                    , DJJ.objectSchema'
+                        (\jos -> jos {DJJ.exclusiveMinimumKey = pure 0}) $
+                      emptyWithTypeKey "number")
+                  , ( "tags"
+                    , DJJ.ObjectSchema $
+                      DJJ.emptyJsonObjectSchema
+                        { DJJ.itemsKey =
+                            pure . DJJ.ItemsKey . DJJ.One $
+                            emptyWithTypeKey "string"
+                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "array"
+                        , DJJ.minItemsKey = pure 1
+                        , DJJ.uniqueItemsKey = pure True
+                        })
+                  , ( "dimensions"
+                    , DJJ.ObjectSchema $
+                      DJJ.emptyJsonObjectSchema
+                        { DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
+                        , DJJ.propertiesKey =
+                            pure . DMS.fromList $
+                            [ ("length", emptyWithTypeKey "number")
+                            , ("width", emptyWithTypeKey "number")
+                            , ("height", emptyWithTypeKey "number")
+                            ]
+                        , DJJ.requiredKey = pure ["length", "width", "height"]
+                        })
+                  , ( "warehouseLocation"
+                    , DJJ.ObjectSchema $ DJJ.emptyJsonObjectSchema)
                   ]
+              , DJJ.requiredKey = pure ["productId", "productName", "price"]
               }
         } :|
       []

@@ -3,6 +3,7 @@ module Data.Json.JsonSchema
   , JsonBooleanSchema(..)
   , JsonObjectSchema(..)
   , TypeKey(..)
+  , ItemsKey(..)
   , OneOrSome(..)
   , emptyJsonObjectSchema
   , objectSchema
@@ -163,36 +164,37 @@ untaggedJsonOptions :: DA.Options
 untaggedJsonOptions = genericJsonOptions {DA.sumEncoding = DA.UntaggedValue}
 
 keyRemappingsL :: NonEmpty (DT.Text, DT.Text)
-keyRemappingsL = ("$schema", "schemaRef") :| ("$id", "idRef") : keyList
+keyRemappingsL = refList <> keyList
   where
     toTuple :: DT.Text -> (DT.Text, DT.Text)
     toTuple k = (k, k <> "Key")
-    keyList :: [(DT.Text, DT.Text)]
+    refList :: NonEmpty (DT.Text, DT.Text)
+    refList = ("$schema", "schemaRef") :| [("$id", "idRef")]
+    keyList :: NonEmpty (DT.Text, DT.Text)
     keyList =
-      fmap
-        toTuple
-        [ "enum"
-        , "const"
-        , "multipleOf"
-        , "maximum"
-        , "exclusiveMaximum"
-        , "minimum"
-        , "exclusiveMinimum"
-        , "maxLength"
-        , "minLength"
-        , "pattern"
-        , "type"
-        , "items"
-        , "additionalItems"
-        , "maxItems"
-        , "minItems"
-        , "uniqueItems"
-        , "contains"
-        , "maxProperties"
-        , "minProperties"
-        , "required"
-        , "properties"
-        ]
+      fmap toTuple $
+      "enum" :|
+      [ "const"
+      , "multipleOf"
+      , "maximum"
+      , "exclusiveMaximum"
+      , "minimum"
+      , "exclusiveMinimum"
+      , "maxLength"
+      , "minLength"
+      , "pattern"
+      , "type"
+      , "items"
+      , "additionalItems"
+      , "maxItems"
+      , "minItems"
+      , "uniqueItems"
+      , "contains"
+      , "maxProperties"
+      , "minProperties"
+      , "required"
+      , "properties"
+      ]
 
 fromKeyRemappings :: DMS.Map DT.Text DT.Text
 fromKeyRemappings = DMS.fromList . toList $ keyRemappingsL
