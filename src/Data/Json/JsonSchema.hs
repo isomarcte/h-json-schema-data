@@ -1,10 +1,12 @@
 module Data.Json.JsonSchema
-  ( JsonSchema(..)
+  ( ECMA262Regex(..)
+  , Dependency(..)
+  , JsonSchema(..)
+  , ItemsKey(..)
   , JsonBooleanSchema(..)
   , JsonObjectSchema(..)
-  , TypeKey(..)
-  , ItemsKey(..)
   , OneOrSome(..)
+  , TypeKey(..)
   , emptyJsonObjectSchema
   , objectSchema
   , objectSchema'
@@ -20,6 +22,7 @@ import Data.Int (Int)
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid ((<>))
+import Data.Ord (Ord)
 import Data.Text as DT
 import Data.Tuple (swap)
 import Data.Word (Word)
@@ -66,6 +69,7 @@ data JsonObjectSchema where
   JsonObjectSchema
     :: { schemaRef :: Maybe DT.Text
        , idRef :: Maybe DT.Text
+       , ref :: Maybe DT.Text
        , typeKey :: Maybe TypeKey
        , enumKey :: Maybe [DA.Value]
        , constKey :: Maybe DA.Value
@@ -86,7 +90,28 @@ data JsonObjectSchema where
        , maxPropertiesKey :: Maybe Word
        , minPropertiesKey :: Maybe Word
        , requiredKey :: Maybe [DT.Text]
-       , propertiesKey :: Maybe (DMS.Map DT.Text JsonSchema)}
+       , propertiesKey :: Maybe (DMS.Map DT.Text JsonSchema)
+       , patternPropertiesKey :: Maybe (DMS.Map ECMA262Regex JsonSchema)
+       , additionalPropertiesKey :: Maybe JsonSchema
+       , dependenciesKey :: Maybe (DMS.Map DT.Text Dependency)
+       , propertyNamesKey :: Maybe JsonSchema
+       , ifKey :: Maybe JsonSchema
+       , thenKey :: Maybe JsonSchema
+       , elseKey :: Maybe JsonSchema
+       , allOfKey :: Maybe (NonEmpty JsonSchema)
+       , anyOfKey :: Maybe (NonEmpty JsonSchema)
+       , oneOfKey :: Maybe (NonEmpty JsonSchema)
+       , notKey :: Maybe JsonSchema
+       , formatKey :: Maybe DT.Text
+       , contentEncodingKey :: Maybe DT.Text
+       , contentMediaTypeKey :: Maybe DT.Text
+       , definitionsKey :: Maybe (DMS.Map DT.Text JsonSchema)
+       , titleKey :: Maybe DT.Text
+       , descriptionKey :: Maybe DT.Text
+       , defaultKey :: Maybe DA.Value
+       , readOnlyKey :: Maybe Bool
+       , writeOnlyKey :: Maybe Bool
+       , examplesKey :: Maybe [DA.Value]}
     -> JsonObjectSchema
 
 deriving instance Eq JsonObjectSchema
@@ -106,6 +131,7 @@ emptyJsonObjectSchema =
   JsonObjectSchema
     { schemaRef = Nothing
     , idRef = Nothing
+    , ref = Nothing
     , typeKey = Nothing
     , enumKey = Nothing
     , constKey = Nothing
@@ -127,6 +153,27 @@ emptyJsonObjectSchema =
     , minPropertiesKey = Nothing
     , requiredKey = Nothing
     , propertiesKey = Nothing
+    , patternPropertiesKey = Nothing
+    , additionalPropertiesKey = Nothing
+    , dependenciesKey = Nothing
+    , propertyNamesKey = Nothing
+    , ifKey = Nothing
+    , thenKey = Nothing
+    , elseKey = Nothing
+    , allOfKey = Nothing
+    , anyOfKey = Nothing
+    , oneOfKey = Nothing
+    , notKey = Nothing
+    , formatKey = Nothing
+    , contentEncodingKey = Nothing
+    , contentMediaTypeKey = Nothing
+    , definitionsKey = Nothing
+    , titleKey = Nothing
+    , descriptionKey = Nothing
+    , defaultKey = Nothing
+    , readOnlyKey = Nothing
+    , writeOnlyKey = Nothing
+    , examplesKey = Nothing
     }
 
 data OneOrSome a where
@@ -144,6 +191,26 @@ instance DA.FromJSON a => DA.FromJSON (OneOrSome a) where
 
 instance DA.ToJSON a => DA.ToJSON (OneOrSome a) where
   toJSON = DA.genericToJSON untaggedJsonOptions
+
+data Dependency where
+  DependencySchema :: JsonSchema -> Dependency
+  DependencyArray :: [DT.Text] -> Dependency
+
+deriving instance Show Dependency
+
+deriving instance Eq Dependency
+
+deriving instance Generic Dependency
+
+instance DA.ToJSON Dependency where
+  toJSON = DA.genericToJSON untaggedJsonOptions
+
+instance DA.FromJSON Dependency where
+  parseJSON = DA.genericParseJSON untaggedJsonOptions
+
+newtype ECMA262Regex =
+  ECMA262Regex DT.Text
+  deriving (Show, Eq, DA.ToJSON, DA.FromJSON, DA.ToJSONKey, DA.FromJSONKey, Ord)
 
 newtype ItemsKey =
   ItemsKey (OneOrSome JsonSchema)
@@ -169,7 +236,7 @@ keyRemappingsL = refList <> keyList
     toTuple :: DT.Text -> (DT.Text, DT.Text)
     toTuple k = (k, k <> "Key")
     refList :: NonEmpty (DT.Text, DT.Text)
-    refList = ("$schema", "schemaRef") :| [("$id", "idRef")]
+    refList = ("$schema", "schemaRef") :| [("$id", "idRef"), ("$ref", "ref")]
     keyList :: NonEmpty (DT.Text, DT.Text)
     keyList =
       fmap toTuple $
@@ -194,6 +261,26 @@ keyRemappingsL = refList <> keyList
       , "minProperties"
       , "required"
       , "properties"
+      , "patternProperties"
+      , "dependencies"
+      , "propertyNames"
+      , "if"
+      , "then"
+      , "else"
+      , "allOf"
+      , "anyOf"
+      , "oneOf"
+      , "not"
+      , "format"
+      , "contentEncoding"
+      , "contentMediaType"
+      , "definitions"
+      , "title"
+      , "description"
+      , "default"
+      , "readOnly"
+      , "writeOnly"
+      , "examples"
       ]
 
 fromKeyRemappings :: DMS.Map DT.Text DT.Text
