@@ -53,6 +53,8 @@ tests:
     generated-other-modules:
     - Paths_h_json_schema_data
     other-modules:
+    - Property.JsonSchemaProperties
+    - Property.JsonSchemaGenerators
     - Unit.ExampleSchemas
     - Unit.ParseExamples
     source-dirs:         test
@@ -60,8 +62,14 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wno-orphans
     dependencies:
     - h-json-schema-data
+    - QuickCheck
     - filepath
+    - quickcheck-text
+    - scientific
     - tasty
     - tasty-hunit
+    - tasty-quickcheck
+    - vector

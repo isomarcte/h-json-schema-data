@@ -138,7 +138,7 @@ schemas = fmap f schemaFileMap
                         { DJJ.descriptionKey =
                             pure
                               "Coordinates of the warehouse where the product is located."
-                        , DJJ.ref =
+                        , DJJ.refRef =
                             pure
                               "https://example.com/geographical-location.schema.json"
                         })
