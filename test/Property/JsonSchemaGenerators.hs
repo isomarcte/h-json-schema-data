@@ -59,19 +59,20 @@ scientificGen :: TQ.Gen Scientific
 scientificGen = scientific <$> TQ.arbitrary <*> TQ.arbitrary
 
 objectGen :: ValueGenConfig -> TQ.Gen (DHS.HashMap DT.Text DA.Value)
-objectGen cfg = sized' $ objectGen' >=> 
+objectGen cfg = sized' $ (\w -> objectGen' w cfg)
 
 objectGen' ::
      MonadReader ValueGenConfig m
   => Word
   -> m (TQ.Gen (DHS.HashMap DT.Text DA.Value))
-objectGen' 0 = pure DHS.empty
-objectGen' n = liftM DHS.fromList . TQ.listOf $ pairGen cfg n
+objectGen' 0 = pure . pure $ DHS.empty
+objectGen' n = liftM DHS.fromList . TQ.listOf $ pairGen n
   where
-    pairGen :: ValueGenConfig -> Word -> TQ.Gen (DT.Text, DA.Value)
-    pairGen cfg' n' = do
+    pairGen ::
+         MonadReader ValueGenConfig m => Word -> m (TQ.Gen (DT.Text, DA.Value))
+    pairGen n' = valueGen' (div n 2) >>=
       key <- resize' n' genValidUtf8
-      value <- valueGen' cfg' (div n 2)
+      value <- valueGen' (div n 2)
       return (key, value)
 
 arrayGen :: ValueGenConfig -> TQ.Gen (DV.Vector DA.Value)
