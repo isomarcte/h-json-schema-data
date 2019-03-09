@@ -3,11 +3,14 @@ module Property.JsonSchemaGenerators
   ) where
 
 import Control.Applicative (Applicative(..), (<$>), liftA)
+import Control.Monad (liftM, return)
+import Control.Monad.Reader.Class (MonadReader(..))
 import Data.Bool (Bool(..))
-import Data.Function (($), (.))
+import Data.Function (($), (.), flip)
+import Data.Ord (Ord(..))
 import Data.Scientific (Scientific(..), scientific)
 import Data.Word (Word)
-import Test.QuickCheck (Arbitrary(..), Gen, elements, listOf, oneof)
+import Prelude (Integral(..), Num(..), div, fromIntegral, otherwise)
 import Test.QuickCheck.Utf8 (genValidUtf8)
 
 import qualified Data.Aeson as DA
@@ -15,52 +18,97 @@ import qualified Data.HashMap.Strict as DHS
 import qualified Data.Json.JsonSchema as DJJ
 import qualified Data.Text as DT
 import qualified Data.Vector as DV
+import qualified Test.QuickCheck as TQ
 
-pureGen :: Applicative f => Gen a -> Gen (f a)
+pureGen :: Applicative f => TQ.Gen a -> TQ.Gen (f a)
 pureGen = liftA pure
 
-oneOrSomeGen :: Gen a -> Gen (DJJ.OneOrSome a)
-oneOrSomeGen a = oneof [liftA DJJ.One a, liftA DJJ.Some $ listOf a]
+oneOrSomeGen :: TQ.Gen a -> TQ.Gen (DJJ.OneOrSome a)
+oneOrSomeGen a = TQ.oneof [liftA DJJ.One a, liftA DJJ.Some $ TQ.listOf a]
 
-typeKeyGen :: Gen DT.Text -> Gen DJJ.TypeKey
+typeKeyGen :: TQ.Gen DT.Text -> TQ.Gen DJJ.TypeKey
 typeKeyGen = liftA DJJ.TypeKey . oneOrSomeGen
 
 data ValueGenConfig where
   ValueGenConfig
-    :: { boolGen :: Gen Bool
-       , stringGen :: Gen DT.Text
-       , numberGen :: Gen Scientific}
+    :: { boolGen :: TQ.Gen Bool
+       , stringGen :: TQ.Gen DT.Text
+       , numberGen :: TQ.Gen Scientific}
     -> ValueGenConfig
 
 defaultValueGenConfig :: ValueGenConfig
 defaultValueGenConfig =
   ValueGenConfig
-    {boolGen = arbitrary, stringGen = genValidUtf8, numberGen = scientificGen}
+    { boolGen = TQ.arbitrary
+    , stringGen = genValidUtf8
+    , numberGen = scientificGen
+    }
 
-scientificGen :: Gen Scientific
-scientificGen = scientific <$> arbitrary <*> arbitrary
+clampToWord :: (Integral a, Ord a) => a -> Word
+clampToWord n
+  | n < 0 = 0
+  | otherwise = fromIntegral n
 
-objectGen :: 
+resize' :: Word -> TQ.Gen a -> TQ.Gen a
+resize' = TQ.resize . fromIntegral
 
-valueGen' :: ValueGenConfig -> Word -> Gen DA.Value
-valueGen' (ValueGenConfig {boolGen, stringGen, numberGen}) 0 =
-  oneof
+sized' :: (Word -> TQ.Gen a) -> TQ.Gen a
+sized' f = TQ.sized (f . clampToWord)
+
+scientificGen :: TQ.Gen Scientific
+scientificGen = scientific <$> TQ.arbitrary <*> TQ.arbitrary
+
+objectGen :: ValueGenConfig -> TQ.Gen (DHS.HashMap DT.Text DA.Value)
+objectGen cfg = sized' $ objectGen' cfg
+
+objectGen' :: ValueGenConfig -> Word -> TQ.Gen (DHS.HashMap DT.Text DA.Value)
+objectGen' _ 0 = pure DHS.empty
+objectGen' cfg n = liftM DHS.fromList . TQ.listOf $ pairGen cfg n
+  where
+    pairGen :: ValueGenConfig -> Word -> TQ.Gen (DT.Text, DA.Value)
+    pairGen cfg' n' = do
+      key <- resize' n' genValidUtf8
+      value <- valueGen' cfg' (div n 2)
+      return (key, value)
+
+arrayGen :: ValueGenConfig -> TQ.Gen (DV.Vector DA.Value)
+arrayGen cfg = sized' $ arrayGen' cfg
+
+arrayGen' ::
+     MonadReader ValueGenConfig m => Word -> m (TQ.Gen (DV.Vector DA.Value))
+arrayGen' 0 = pure DV.empty
+arrayGen' n =
+  let recursiveSize = div n 2
+   in resize' n $ DV.fromList <$> TQ.listOf (valueGen' cfg recursiveSize)
+
+primitiveValueGen :: ValueGenConfig -> TQ.Gen DA.Value
+primitiveValueGen cfg = sized' $ primitiveValueGen' cfg
+
+primitiveValueGen' :: ValueGenConfig -> Word -> TQ.Gen DA.Value
+primitiveValueGen' (ValueGenConfig {boolGen, stringGen, numberGen}) n =
+  resize' n $
+  TQ.oneof
     [ liftA DA.Bool boolGen
     , liftA DA.Number numberGen
     , liftA DA.String stringGen
-    , elements $ pure DA.Null
+    , pure DA.Null
     ]
-valueGen' (ValueGenConfig {boolGen, stringGen, numberGen}) n =
-  oneof
-    [ liftA DA.Bool boolGen
-    , liftA DA.Number numberGen
-    , liftA DA.String stringGen
-    , elements $ pure DA.Null
-    , list
-    ]
--- valueGen :: ValueGenConfig -> Gen DA.Value
+
+valueGen :: ValueGenConfig -> TQ.Gen DA.Value
+valueGen cfg = sized' $ valueGen' cfg
+
+valueGen' :: MonadReaderValueGenConfig -> Word -> TQ.Gen DA.Value
+valueGen' cfg 0 = primitiveValueGen' cfg 0
+valueGen' cfg n =
+  let recursiveSize = div n 2
+   in TQ.oneof $
+      [ primitiveValueGen' cfg n
+      , DA.Object <$> objectGen' cfg recursiveSize
+      , DA.Array <$> arrayGen' cfg recursiveSize
+      ]
+-- valueGen :: ValueGenConfig -> TQ.Gen DA.Value
 -- valueGen =
--- structurallyValidJsonObjectSchemaGen :: Gen DJJ.JsonObjectSchema
+-- structurallyValidJsonObjectSchemaGen :: TQ.Gen DJJ.JsonObjectSchema
 -- structurallyValidJsonObjectSchemaGen =
 --   DJJ.JsonObjectSchema <$>
 --   pureGen genValidUtf8 <*>
