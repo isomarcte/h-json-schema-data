@@ -59,11 +59,14 @@ scientificGen :: TQ.Gen Scientific
 scientificGen = scientific <$> TQ.arbitrary <*> TQ.arbitrary
 
 objectGen :: ValueGenConfig -> TQ.Gen (DHS.HashMap DT.Text DA.Value)
-objectGen cfg = sized' $ objectGen' cfg
+objectGen cfg = sized' $ objectGen' >=> 
 
-objectGen' :: ValueGenConfig -> Word -> TQ.Gen (DHS.HashMap DT.Text DA.Value)
-objectGen' _ 0 = pure DHS.empty
-objectGen' cfg n = liftM DHS.fromList . TQ.listOf $ pairGen cfg n
+objectGen' ::
+     MonadReader ValueGenConfig m
+  => Word
+  -> m (TQ.Gen (DHS.HashMap DT.Text DA.Value))
+objectGen' 0 = pure DHS.empty
+objectGen' n = liftM DHS.fromList . TQ.listOf $ pairGen cfg n
   where
     pairGen :: ValueGenConfig -> Word -> TQ.Gen (DT.Text, DA.Value)
     pairGen cfg' n' = do
@@ -84,7 +87,8 @@ arrayGen' n =
 primitiveValueGen :: ValueGenConfig -> TQ.Gen DA.Value
 primitiveValueGen cfg = sized' $ primitiveValueGen' cfg
 
-primitiveValueGen' :: ValueGenConfig -> Word -> TQ.Gen DA.Value
+primitiveValueGen' ::
+     MonadReader ValueGenConfig m => Word -> m (TQ.Gen DA.Value)
 primitiveValueGen' (ValueGenConfig {boolGen, stringGen, numberGen}) n =
   resize' n $
   TQ.oneof
@@ -97,9 +101,9 @@ primitiveValueGen' (ValueGenConfig {boolGen, stringGen, numberGen}) n =
 valueGen :: ValueGenConfig -> TQ.Gen DA.Value
 valueGen cfg = sized' $ valueGen' cfg
 
-valueGen' :: MonadReaderValueGenConfig -> Word -> TQ.Gen DA.Value
-valueGen' cfg 0 = primitiveValueGen' cfg 0
-valueGen' cfg n =
+valueGen' :: MonadReader ValueGenConfig m => Word -> m (TQ.Gen DA.Value)
+valueGen' 0 = primitiveValueGen' cfg 0
+valueGen' n =
   let recursiveSize = div n 2
    in TQ.oneof $
       [ primitiveValueGen' cfg n
