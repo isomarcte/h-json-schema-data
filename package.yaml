@@ -54,8 +54,10 @@ tests:
     generated-other-modules:
     - Paths_h_json_schema_data
     other-modules:
-    - Property.JsonSchemaProperties
+    - Property.JsonGenerators
     - Property.JsonSchemaGenerators
+    - Property.JsonSchemaProperties
+    - Property.QuickCheckUtilities
     - Unit.ExampleSchemas
     - Unit.ParseExamples
     source-dirs:         test

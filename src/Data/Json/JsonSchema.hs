@@ -5,6 +5,7 @@ module Data.Json.JsonSchema
   , ECMA262Regex(..)
   , Dependency(..)
   , ItemsKey(..)
+  , AdditionalItemsKey(..)
   , TypeKey(..)
   , OneOrSome(..)
   , emptyJsonObjectSchema

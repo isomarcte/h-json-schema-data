@@ -2,12 +2,23 @@ module Property.JsonSchemaProperties
   ( jsonSchemaProperties
   ) where
 
-import Test.QuickCheck (Arbitrary(..), sized)
-import Test.Tasty (TestTree, testGroup)
+import Data.Function (($), (.))
+import Test.QuickCheck (Property, (===), forAll)
+import Test.Tasty (TestTree)
+import Test.Tasty.QuickCheck (testProperties)
 
+import qualified Data.Aeson as DA
 import qualified Data.Json.JsonSchema as DJJ
+import qualified Property.JsonSchemaGenerators as PJSG
 
 jsonSchemaProperties :: TestTree
-jsonSchemaProperties = testGroup "JsonSchema Property Tests" []
+jsonSchemaProperties =
+  testProperties
+    "JsonSchema Property Tests"
+    [("Json Schema Symmetry", jsonSchemaSymmetryPropForAll)]
 
-deriving instance Arbitrary DJJ.JsonBooleanSchema
+jsonSchemaSymmetryPropForAll :: Property
+jsonSchemaSymmetryPropForAll = forAll PJSG.jsonSchemaGen jsonSchemaSymmetryProp
+
+jsonSchemaSymmetryProp :: DJJ.JsonSchema -> Property
+jsonSchemaSymmetryProp js = DA.Success js === (DA.fromJSON . DA.toJSON $ js)
