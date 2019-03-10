@@ -265,7 +265,12 @@ newtype TypeKey =
   deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
 
 genericJsonOptions :: DA.Options
-genericJsonOptions = DA.defaultOptions {DA.unwrapUnaryRecords = True}
+genericJsonOptions =
+  DA.defaultOptions
+    { DA.unwrapUnaryRecords = True
+    , DA.omitNothingFields = False
+    , DA.allNullaryToStringTag = False
+    }
 
 untaggedJsonOptions :: DA.Options
 untaggedJsonOptions = genericJsonOptions {DA.sumEncoding = DA.UntaggedValue}
