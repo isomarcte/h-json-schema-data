@@ -57,6 +57,7 @@ tests:
     - Property.JsonGenerators
     - Property.JsonSchemaGenerators
     - Property.JsonSchemaProperties
+    - Property.OrphanArbitraryInstances
     - Property.QuickCheckUtilities
     - Unit.ExampleSchemas
     - Unit.ParseExamples

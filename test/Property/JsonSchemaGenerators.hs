@@ -1,6 +1,7 @@
 module Property.JsonSchemaGenerators
   ( jsonSchemaGen
   , jsonSchemaGen'
+  , jsonObjectSchemaGen
   , jsonObjectSchemaGen'
   , jsonBooleanSchemaGen
   ) where
@@ -15,6 +16,7 @@ import Data.Maybe (Maybe(..))
 import Data.Ord (Ord(..))
 import Data.Word (Word)
 import Prelude (Integral(..), div)
+import Property.OrphanArbitraryInstances ()
 import Property.QuickCheckUtilities (scale')
 import Test.QuickCheck.Utf8 (genValidUtf8)
 
@@ -24,6 +26,45 @@ import qualified Data.Text as DT
 import qualified Property.JsonGenerators as PJ
 import qualified Property.QuickCheckUtilities as PQCU
 import qualified Test.QuickCheck as TQ
+
+instance TQ.Arbitrary DJJ.JsonSchema where
+  arbitrary = jsonSchemaGen
+  shrink (DJJ.BooleanSchema bs) = DJJ.BooleanSchema <$> TQ.shrink bs
+  shrink (DJJ.ObjectSchema os) = DJJ.ObjectSchema <$> TQ.shrink os
+
+instance TQ.Arbitrary DJJ.JsonBooleanSchema where
+  arbitrary = fmap DJJ.JsonBooleanSchema TQ.arbitrary
+  shrink = TQ.genericShrink
+
+instance TQ.Arbitrary DJJ.JsonObjectSchema where
+  arbitrary = jsonObjectSchemaGen PJ.defaultValueGenConfig
+  shrink = TQ.genericShrink
+
+instance TQ.Arbitrary a => TQ.Arbitrary (DJJ.OneOrSome a) where
+  arbitrary = TQ.oneof [fmap DJJ.One TQ.arbitrary, fmap DJJ.Some TQ.arbitrary]
+  shrink (DJJ.One a) = DJJ.One <$> TQ.shrink a
+  shrink (DJJ.Some a) = DJJ.Some <$> TQ.shrink a
+
+instance TQ.Arbitrary DJJ.TypeKey where
+  arbitrary = typeKeyGen TQ.arbitrary
+  shrink (DJJ.TypeKey oos) = DJJ.TypeKey <$> TQ.shrink oos
+
+instance TQ.Arbitrary DJJ.ItemsKey where
+  arbitrary = itemsKeyGen jsonSchemaGen
+  shrink (DJJ.ItemsKey oos) = DJJ.ItemsKey <$> TQ.shrink oos
+
+instance TQ.Arbitrary DJJ.AdditionalItemsKey where
+  arbitrary = additionalItemsKeyGen jsonSchemaGen
+  shrink (DJJ.AdditionalItemsKey oos) = DJJ.AdditionalItemsKey <$> TQ.shrink oos
+
+instance TQ.Arbitrary DJJ.ECMA262Regex where
+  arbitrary = ecma262RegexGen genValidUtf8
+  shrink (DJJ.ECMA262Regex t) = DJJ.ECMA262Regex <$> TQ.shrink t
+
+instance TQ.Arbitrary DJJ.Dependency where
+  arbitrary = dependencyGen TQ.arbitrary genValidUtf8
+  shrink (DJJ.DependencySchema s) = DJJ.DependencySchema <$> TQ.shrink s
+  shrink (DJJ.DependencyArray t) = DJJ.DependencyArray <$> TQ.shrink t
 
 oneOrSomeGen :: TQ.Gen a -> TQ.Gen (DJJ.OneOrSome a)
 oneOrSomeGen a =
@@ -70,6 +111,9 @@ mapGen' a b _ =
     key <- a
     value <- b
     return (key, value)
+
+jsonObjectSchemaGen :: PJ.ValueGenConfig -> TQ.Gen DJJ.JsonObjectSchema
+jsonObjectSchemaGen = PQCU.sized' . jsonObjectSchemaGen'
 
 jsonObjectSchemaGen' :: PJ.ValueGenConfig -> Word -> TQ.Gen DJJ.JsonObjectSchema
 jsonObjectSchemaGen' _ 0 = pure DJJ.emptyJsonObjectSchema

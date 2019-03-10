@@ -3,21 +3,14 @@ module Property.JsonSchemaProperties
   ) where
 
 import Data.Function (($), (.))
-import Data.Functor (fmap)
-import Test.QuickCheck
-  ( Arbitrary(..)
-  , Property
-  , (===)
-  , forAllShrink
-  , genericShrink
-  )
+import Property.JsonSchemaGenerators ()
+import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (testProperties)
 
 import qualified Data.Aeson as DA
 import qualified Data.Json.JsonSchema as DJJ
-import qualified Property.JsonGenerators as PJG
-import qualified Property.JsonSchemaGenerators as PJSG
+import qualified Test.QuickCheck as TQ
 
 jsonSchemaProperties :: TestTree
 jsonSchemaProperties =
@@ -25,16 +18,9 @@ jsonSchemaProperties =
     "JsonSchema Property Tests"
     [("Json Schema Symmetry", jsonSchemaSymmetryPropForAll)]
 
-jsonSchemaSymmetryPropForAll :: Property
+jsonSchemaSymmetryPropForAll :: TQ.Property
 jsonSchemaSymmetryPropForAll =
-  forAllShrink PJSG.jsonSchemaGen genericShrink jsonSchemaSymmetryProp
+  TQ.forAllShrink TQ.arbitrary TQ.shrink jsonSchemaSymmetryProp
 
-jsonSchemaSymmetryProp :: DJJ.JsonSchema -> Property
+jsonSchemaSymmetryProp :: DJJ.JsonSchema -> TQ.Property
 jsonSchemaSymmetryProp js = DA.Success js === (DA.fromJSON . DA.toJSON $ js)
-
-instance Arbitrary DJJ.JsonBooleanSchema where
-  arbitrary = PJSG.jsonBooleanSchemaGen arbitrary
-  shrink (DJJ.JsonBooleanSchema b) = fmap DJJ.JsonBooleanSchema $ shrink b
-
-instance Arbitrary DJJ.JsonObjectSchema where
-  arbitrary = PJSG.jsonObjectSchemaGen PJG.defaultValueGenConfig

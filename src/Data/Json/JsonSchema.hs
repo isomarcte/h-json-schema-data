@@ -68,7 +68,7 @@ instance DA.ToJSON JsonSchema where
 -- See <https://json-schema.org/latest/json-schema-core.html#rfc.section.4.3.1>
 newtype JsonBooleanSchema =
   JsonBooleanSchema Bool
-  deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
+  deriving (Generic, Show, Eq, DA.ToJSON, DA.FromJSON)
 
 -- | 'JsonObjectSchema' represents a JSON object schema structure. As
 -- mentioned in 'JsonSchema', it only represents a structurally valid
@@ -268,7 +268,7 @@ genericJsonOptions :: DA.Options
 genericJsonOptions =
   DA.defaultOptions
     { DA.unwrapUnaryRecords = True
-    , DA.omitNothingFields = False
+    , DA.omitNothingFields = True
     , DA.allNullaryToStringTag = False
     }
 
