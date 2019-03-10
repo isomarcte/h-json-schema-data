@@ -68,7 +68,7 @@ instance TQ.Arbitrary DJJ.Dependency where
 
 oneOrSomeGen :: TQ.Gen a -> TQ.Gen (DJJ.OneOrSome a)
 oneOrSomeGen a =
-  let a' = scale' (`div` 2) a
+  let a' = scale' (`div` 4) a
    in TQ.oneof [fmap DJJ.One a', DJJ.Some <$> TQ.listOf a']
 
 typeKeyGen :: TQ.Gen DT.Text -> TQ.Gen DJJ.TypeKey
@@ -118,7 +118,7 @@ jsonObjectSchemaGen = PQCU.sized' . jsonObjectSchemaGen'
 jsonObjectSchemaGen' :: PJ.ValueGenConfig -> Word -> TQ.Gen DJJ.JsonObjectSchema
 jsonObjectSchemaGen' _ 0 = pure DJJ.emptyJsonObjectSchema
 jsonObjectSchemaGen' cfg n =
-  let recursiveSize = div n 2
+  let recursiveSize = div n 4
       jsg = jsonSchemaGen' recursiveSize
    in do schemaRef' <- maybeGen genValidUtf8
          idRef' <- maybeGen genValidUtf8

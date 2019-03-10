@@ -60,7 +60,7 @@ objectGen' n = fmap DHS.fromList . TQ.listOf <$> pairGen n
     pairGen ::
          MonadReader ValueGenConfig m => Word -> m (TQ.Gen (DT.Text, DA.Value))
     pairGen n' = do
-      vg <- valueGen' (div n 2)
+      vg <- valueGen' (div n 4)
       return $ do
         key <- resize' n' genValidUtf8
         value <- vg
@@ -73,7 +73,7 @@ arrayGen' ::
      MonadReader ValueGenConfig m => Word -> m (TQ.Gen (DV.Vector DA.Value))
 arrayGen' 0 = pure $ pure DV.empty
 arrayGen' n =
-  let recursiveSize = div n 2
+  let recursiveSize = div n 4
    in fmap (resize' n . fmap DV.fromList . TQ.listOf) (valueGen' recursiveSize)
 
 primitiveValueGen :: ValueGenConfig -> TQ.Gen DA.Value
@@ -97,7 +97,7 @@ valueGen cfg = sized' $ \w -> valueGen' w cfg
 valueGen' :: MonadReader ValueGenConfig m => Word -> m (TQ.Gen DA.Value)
 valueGen' 0 = primitiveValueGen' 0
 valueGen' n =
-  let recursiveSize = div n 2
+  let recursiveSize = div n 4
    in fmap TQ.oneof $ do
         pvg <- primitiveValueGen' n
         og <- objectGen' recursiveSize

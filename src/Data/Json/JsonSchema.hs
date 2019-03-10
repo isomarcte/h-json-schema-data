@@ -11,6 +11,9 @@ module Data.Json.JsonSchema
   , emptyJsonObjectSchema
   ) where
 
+import Control.Applicative ((<$>))
+import Control.Monad (return)
+import Data.Aeson.Types (Parser)
 import Data.Bool (Bool(..))
 import Data.Eq (Eq)
 import Data.Function (($), (.))
@@ -141,7 +144,25 @@ deriving instance Generic JsonObjectSchema
 deriving instance Show JsonObjectSchema
 
 instance DA.FromJSON JsonObjectSchema where
-  parseJSON = DA.genericParseJSON genericJsonOptions . fromJsonKeyMangle
+  parseJSON v@(DA.Object hm) = do
+    jos <- DA.genericParseJSON genericJsonOptions $ fromJsonKeyMangle v
+    let f = extractNullableKey hm
+    constKey' <- f "const"
+    defaultKey' <- f "default"
+    return $
+      ammendResult jos (ConstKey <$> constKey') (DefaultKey <$> defaultKey')
+    where
+      extractNullableKey ::
+           DHS.HashMap DT.Text DA.Value -> DT.Text -> Parser (Maybe DA.Value)
+      extractNullableKey = (DA..:!)
+      ammendResult ::
+           JsonObjectSchema
+        -> Maybe ConstKey
+        -> Maybe DefaultKey
+        -> JsonObjectSchema
+      ammendResult j c d =
+        j {constKey = fmap constKeyValue c, defaultKey = fmap defaultKeyValue d}
+  parseJSON v = DA.genericParseJSON genericJsonOptions $ fromJsonKeyMangle v
 
 instance DA.ToJSON JsonObjectSchema where
   toJSON = toJsonKeyMangle . DA.genericToJSON genericJsonOptions
@@ -263,6 +284,14 @@ newtype AdditionalItemsKey =
 newtype TypeKey =
   TypeKey (OneOrSome DT.Text)
   deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
+
+newtype ConstKey = ConstKey
+  { constKeyValue :: DA.Value
+  } deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
+
+newtype DefaultKey = DefaultKey
+  { defaultKeyValue :: DA.Value
+  } deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
 
 genericJsonOptions :: DA.Options
 genericJsonOptions =

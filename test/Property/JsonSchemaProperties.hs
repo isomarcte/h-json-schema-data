@@ -20,7 +20,7 @@ jsonSchemaProperties =
 
 jsonSchemaSymmetryPropForAll :: TQ.Property
 jsonSchemaSymmetryPropForAll =
-  TQ.forAllShrink TQ.arbitrary TQ.shrink jsonSchemaSymmetryProp
+  TQ.forAllShrink (TQ.resize 16 TQ.arbitrary) TQ.shrink jsonSchemaSymmetryProp
 
 jsonSchemaSymmetryProp :: DJJ.JsonSchema -> TQ.Property
 jsonSchemaSymmetryProp js = DA.Success js === (DA.fromJSON . DA.toJSON $ js)
