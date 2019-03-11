@@ -1,4 +1,4 @@
-module Property.QuickCheckUtilities
+module Data.Json.Schema.QuickCheckUtilities
   ( clampToWord
   , resize'
   , sized'

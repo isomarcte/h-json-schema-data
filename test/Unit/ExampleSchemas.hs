@@ -23,6 +23,7 @@ import Text.Show (Show(..))
 
 import qualified Data.Aeson as DA
 import qualified Data.Json.JsonSchema as DJJ
+import qualified Data.Json.Schema.Types as DJST
 import qualified Data.Map.Strict as DMS
 import qualified Data.Text as DT
 import qualified Paths_h_json_schema_data as Paths
@@ -69,7 +70,7 @@ lookupOrError a m =
 emptyWithTypeKey :: DT.Text -> DJJ.JsonSchema
 emptyWithTypeKey t =
   DJJ.ObjectSchema $
-  DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One t}
+  DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJST.Tagged $ DJST.One t}
 
 schemas :: IO (NonEmpty (TestComparison DJJ.JsonSchema))
 schemas = fmap f schemaFileMap
@@ -82,9 +83,9 @@ schemas = fmap f schemaFileMap
         , expected =
             DJJ.ObjectSchema $
             DJJ.emptyJsonObjectSchema
-              { DJJ.schemaRef = pure jsonSchemaDraft07SchemaRef
+              { DJJ.schemaRef = pure . DJST.Tagged $ jsonSchemaDraft07SchemaRef
               , DJJ.idRef = pure "http://example.com/product.schema.json"
-              , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
+              , DJJ.typeKey = pure . DJST.Tagged $ DJST.One "object"
               , DJJ.titleKey = pure "Product"
               , DJJ.descriptionKey = pure "A product from Acme's catalog"
               , DJJ.propertiesKey =
@@ -94,36 +95,36 @@ schemas = fmap f schemaFileMap
                       DJJ.emptyJsonObjectSchema
                         { DJJ.descriptionKey =
                             pure "The unique identifier for a product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "integer"
+                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "integer"
                         })
                   , ( "productName"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.descriptionKey = pure "Name of the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "string"
+                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "string"
                         })
                   , ( "price"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.descriptionKey = pure "The price of the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "number"
+                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "number"
                         , DJJ.exclusiveMinimumKey = pure 0
                         })
                   , ( "tags"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.itemsKey =
-                            pure . DJJ.ItemsKey . DJJ.One $
+                            pure . DJJ.ItemsKey . DJST.One $
                             emptyWithTypeKey "string"
                         , DJJ.descriptionKey = pure "Tags for the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "array"
+                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "array"
                         , DJJ.minItemsKey = pure 1
                         , DJJ.uniqueItemsKey = pure True
                         })
                   , ( "dimensions"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
-                        { DJJ.typeKey = pure . DJJ.TypeKey $ DJJ.One "object"
+                        { DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "object"
                         , DJJ.propertiesKey =
                             pure . DMS.fromList $
                             [ ("length", emptyWithTypeKey "number")

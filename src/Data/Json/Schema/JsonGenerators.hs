@@ -1,4 +1,4 @@
-module Property.JsonGenerators
+module Data.Json.Schema.JsonGenerators
   ( ValueGenConfig(..)
   , defaultValueGenConfig
   , valueGen
@@ -17,10 +17,10 @@ import Control.Monad.Reader.Class (MonadReader(..), ask)
 import Data.Bool (Bool(..))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
+import Data.Json.Schema.QuickCheckUtilities (resize', sized')
 import Data.Scientific (Scientific(..), scientific)
 import Data.Word (Word)
 import Prelude (Integral(..), div)
-import Property.QuickCheckUtilities (resize', sized')
 import Test.QuickCheck.Utf8 (genValidUtf8)
 
 import qualified Data.Aeson as DA
@@ -103,11 +103,3 @@ valueGen' n =
         og <- objectGen' recursiveSize
         ag <- arrayGen' recursiveSize
         return [pvg, fmap DA.Object og, fmap DA.Array ag]
--- valueGen :: ValueGenConfig -> TQ.Gen DA.Value
--- valueGen =
--- structurallyValidJsonObjectSchemaGen :: TQ.Gen DJJ.JsonObjectSchema
--- structurallyValidJsonObjectSchemaGen =
---   DJJ.JsonObjectSchema <$>
---   pureGen genValidUtf8 <*>
---   pureGen genValidUtf8 <*>
---   pureGen genValidUtf8 <*>

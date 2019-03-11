@@ -17,13 +17,18 @@ description:         Please see the README on GitHub at <https://github.com/isom
 
 dependencies:
 - base >= 4.7 && < 5
+- QuickCheck
 - aeson
 - bytestring
 - containers
+- mtl
 - nonempty-containers
+- quickcheck-text
+- scientific
 - text
 - unordered-containers
 - uri-bytestring
+- vector
 
 ghc-options:
   - -Wall
@@ -34,9 +39,16 @@ data-files:
 
 library:
   source-dirs: src
+  other-modules:
+    - Data.Json.Schema.AesonSettings
+    - Data.Json.Schema.JsonGenerators
+    - Data.Json.Schema.QuickCheckUtilities
+    - Data.Json.Schema.JsonSchemaGenerators
 
 default-extensions:
+  - DeriveFunctor
   - DeriveGeneric
+  - DisambiguateRecordFields
   - EmptyDataDecls
   - FlexibleContexts
   - GADTs
@@ -54,11 +66,7 @@ tests:
     generated-other-modules:
     - Paths_h_json_schema_data
     other-modules:
-    - Property.JsonGenerators
-    - Property.JsonSchemaGenerators
     - Property.JsonSchemaProperties
-    - Property.OrphanArbitraryInstances
-    - Property.QuickCheckUtilities
     - Unit.ExampleSchemas
     - Unit.ParseExamples
     source-dirs:         test
@@ -69,12 +77,7 @@ tests:
     - -Wno-orphans
     dependencies:
     - h-json-schema-data
-    - QuickCheck
     - filepath
-    - mtl
-    - quickcheck-text
-    - scientific
     - tasty
     - tasty-hunit
     - tasty-quickcheck
-    - vector

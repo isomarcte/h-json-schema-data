@@ -2,12 +2,7 @@ module Data.Json.JsonSchema
   ( JsonSchema(..)
   , JsonBooleanSchema(..)
   , JsonObjectSchema(..)
-  , ECMA262Regex(..)
   , Dependency(..)
-  , ItemsKey(..)
-  , AdditionalItemsKey(..)
-  , TypeKey(..)
-  , OneOrSome(..)
   , emptyJsonObjectSchema
   ) where
 
@@ -19,6 +14,8 @@ import Data.Eq (Eq)
 import Data.Function (($), (.))
 import Data.Functor (fmap)
 import Data.Int (Int)
+import Data.Json.Schema.AesonSettings (genericJsonOptions, untaggedJsonOptions)
+import Data.Json.Schema.QuickCheckUtilities (sized')
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid ((<>))
@@ -27,11 +24,16 @@ import Data.Text as DT
 import Data.Tuple (swap)
 import Data.Word (Word)
 import GHC.Generics (Generic)
+import Prelude (undefined)
+import Test.QuickCheck.Utf8 (genValidUtf8)
 import Text.Show (Show(..))
 
 import qualified Data.Aeson as DA
 import qualified Data.HashMap.Strict as DHS
+import qualified Data.Json.Schema.JsonGenerators as DJSJ
+import qualified Data.Json.Schema.Types as DJST
 import qualified Data.Map.Strict as DMS
+import qualified Test.QuickCheck as TQ
 
 -- | 'JsonSchema' defines a data type for draft 7 JSON schema values.
 --
@@ -60,6 +62,12 @@ instance DA.FromJSON JsonSchema where
 instance DA.ToJSON JsonSchema where
   toJSON = DA.genericToJSON untaggedJsonOptions
 
+instance TQ.Arbitrary JsonSchema where
+  arbitrary =
+    TQ.oneof [BooleanSchema <$> TQ.arbitrary, ObjectSchema <$> TQ.arbitrary]
+  shrink (BooleanSchema b) = BooleanSchema <$> TQ.shrink b
+  shrink (ObjectSchema o) = ObjectSchema <$> TQ.shrink o
+
 -- | 'JsonBooleanSchema' is a newtype for JSON boolean value
 -- representing a JSON schema. For the uninitiated, the JSON scheme
 -- specification permits two types of JSON schema values. The one most
@@ -71,7 +79,7 @@ instance DA.ToJSON JsonSchema where
 -- See <https://json-schema.org/latest/json-schema-core.html#rfc.section.4.3.1>
 newtype JsonBooleanSchema =
   JsonBooleanSchema Bool
-  deriving (Generic, Show, Eq, DA.ToJSON, DA.FromJSON)
+  deriving (Generic, Show, Eq, DA.ToJSON, DA.FromJSON, TQ.Arbitrary)
 
 -- | 'JsonObjectSchema' represents a JSON object schema structure. As
 -- mentioned in 'JsonSchema', it only represents a structurally valid
@@ -89,51 +97,51 @@ newtype JsonBooleanSchema =
 -- avoid conflicts with certain reserved words, e.g. @type@.
 data JsonObjectSchema where
   JsonObjectSchema
-    :: { schemaRef :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-core.html#rfc.section.7>
-       , idRef :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-core.html#id-keyword>
-       , refRef :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-core.html#rfc.section.8.3>
-       , typeKey :: Maybe TypeKey -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.1>
-       , enumKey :: Maybe [DA.Value] -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.2>
-       , constKey :: Maybe DA.Value -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.3>
-       , multipleOfKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.1>
-       , maximumKey :: Maybe Int -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.2>
-       , exclusiveMaximumKey :: Maybe Int -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.3>
-       , minimumKey :: Maybe Int -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.4>
-       , exclusiveMinimumKey :: Maybe Int -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.5>
-       , maxLengthKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.1>
-       , minLengthKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.2>
-       , patternKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.3>
-       , itemsKey :: Maybe ItemsKey -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.1>
-       , additionalItemsKey :: Maybe AdditionalItemsKey -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.2>
-       , maxItemsKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.3>
-       , minItemsKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.4>
-       , uniqueItemsKey :: Maybe Bool -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.5>
-       , containsKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.6>
-       , maxPropertiesKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.1>
-       , minPropertiesKey :: Maybe Word -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.2>
-       , requiredKey :: Maybe [DT.Text] -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.3>
-       , propertiesKey :: Maybe (DMS.Map DT.Text JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.4>
-       , patternPropertiesKey :: Maybe (DMS.Map ECMA262Regex JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.5>
-       , additionalPropertiesKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.6>
-       , dependenciesKey :: Maybe (DMS.Map DT.Text Dependency) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.7>
-       , propertyNamesKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.8>
-       , ifKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.1>
-       , thenKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.2>
-       , elseKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.3>
-       , allOfKey :: Maybe (NonEmpty JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.1>
-       , anyOfKey :: Maybe (NonEmpty JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.2>
-       , oneOfKey :: Maybe (NonEmpty JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.3>
-       , notKey :: Maybe JsonSchema -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.4>
-       , formatKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.7>
-       , contentEncodingKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.8.3>
-       , contentMediaTypeKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.8.4>
-       , definitionsKey :: Maybe (DMS.Map DT.Text JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.9>
-       , titleKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.1>
-       , descriptionKey :: Maybe DT.Text -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.1>
-       , defaultKey :: Maybe DA.Value -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.2>
-       , readOnlyKey :: Maybe Bool -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.3>
-       , writeOnlyKey :: Maybe Bool -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.3>
-       , examplesKey :: Maybe [DA.Value] -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.4
+    :: { schemaRef :: Maybe (DJST.Tagged DJST.SchemaRef DT.Text) -- ^ <https://json-schema.org/latest/json-schema-core.html#rfc.section.7>
+       , idRef :: Maybe (DJST.Tagged DJST.IdRef DT.Text) -- ^ <https://json-schema.org/latest/json-schema-core.html#id-keyword>
+       , refRef :: Maybe (DJST.Tagged DJST.RefRef DT.Text) -- ^ <https://json-schema.org/latest/json-schema-core.html#rfc.section.8.3>
+       , typeKey :: Maybe (DJST.Tagged DJST.TypeKey (DJST.OneOrSome DT.Text)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.1>
+       , enumKey :: Maybe (DJST.Tagged DJST.EnumKey [DA.Value]) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.2>
+       , constKey :: Maybe (DJST.Tagged DJST.ConstKey DA.Value) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.3>
+       , multipleOfKey :: Maybe (DJST.Tagged DJST.MultipleOfKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.1>
+       , maximumKey :: Maybe (DJST.Tagged DJST.MaximumKey Int) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.2>
+       , exclusiveMaximumKey :: Maybe (DJST.Tagged DJST.ExclusiveMaximumKey Int) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.3>
+       , minimumKey :: Maybe (DJST.Tagged DJST.MinimumKey Int) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.4>
+       , exclusiveMinimumKey :: Maybe (DJST.Tagged DJST.ExclusiveMinimumKey Int) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.2.5>
+       , maxLengthKey :: Maybe (DJST.Tagged DJST.MaxLengthKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.1>
+       , minLengthKey :: Maybe (DJST.Tagged DJST.MinLengthKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.2>
+       , patternKey :: Maybe (DJST.Tagged DJST.PatternKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.3>
+       , itemsKey :: Maybe (DJST.Tagged DJST.ItemsKey (DJST.OneOrSome DT.Text)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.1>
+       , additionalItemsKey :: Maybe (DJST.Tagged DJST.AdditionalItemsKey (DJST.OneOrSome DT.Text)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.2>
+       , maxItemsKey :: Maybe (DJST.Tagged DJST.MaxItemsKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.3>
+       , minItemsKey :: Maybe (DJST.Tagged DJST.MinItemsKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.4>
+       , uniqueItemsKey :: Maybe (DJST.Tagged DJST.UniqueItemsKey Bool) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.5>
+       , containsKey :: Maybe (DJST.Tagged DJST.ContainsKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.6>
+       , maxPropertiesKey :: Maybe (DJST.Tagged DJST.MaxPropertiesKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.1>
+       , minPropertiesKey :: Maybe (DJST.Tagged DJST.MinPropertiesKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.2>
+       , requiredKey :: Maybe (DJST.Tagged DJST.RequiredKey [DT.Text]) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.3>
+       , propertiesKey :: Maybe (DJST.Tagged DJST.PropertiesKey (DMS.Map DT.Text JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.4>
+       , patternPropertiesKey :: Maybe (DJST.Tagged DJST.PatternPropertiesKey (DMS.Map (DJST.Tagged DJST.ECMA262Regex DT.Text) JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.5>
+       , additionalPropertiesKey :: Maybe (DJST.Tagged DJST.AdditionalPropertiesKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.6>
+       , dependenciesKey :: Maybe (DJST.Tagged DJST.DependenciesKey (DMS.Map DT.Text Dependency)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.7>
+       , propertyNamesKey :: Maybe (DJST.Tagged DJST.PropertyNamesKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.5.8>
+       , ifKey :: Maybe (DJST.Tagged DJST.IfKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.1>
+       , thenKey :: Maybe (DJST.Tagged DJST.ThenKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.2>
+       , elseKey :: Maybe (DJST.Tagged DJST.ElseKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.6.3>
+       , allOfKey :: Maybe (DJST.Tagged DJST.AllOfKey (NonEmpty JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.1>
+       , anyOfKey :: Maybe (DJST.Tagged DJST.AnyOfKey (NonEmpty JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.2>
+       , oneOfKey :: Maybe (DJST.Tagged DJST.OneOfKey (NonEmpty JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.3>
+       , notKey :: Maybe (DJST.Tagged DJST.NotKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.7.4>
+       , formatKey :: Maybe (DJST.Tagged DJST.FormatKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.7>
+       , contentEncodingKey :: Maybe (DJST.Tagged DJST.ContentEncodingKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.8.3>
+       , contentMediaTypeKey :: Maybe (DJST.Tagged DJST.ContentMediaTypeKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.8.4>
+       , definitionsKey :: Maybe (DJST.Tagged DJST.DefinitionsKey (DMS.Map DT.Text JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.9>
+       , titleKey :: Maybe (DJST.Tagged DJST.TitleKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.1>
+       , descriptionKey :: Maybe (DJST.Tagged DJST.DescriptionKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.1>
+       , defaultKey :: Maybe (DJST.Tagged DJST.DefaultKey DA.Value) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.2>
+       , readOnlyKey :: Maybe (DJST.Tagged DJST.ReadOnlyKey Bool) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.3>
+       , writeOnlyKey :: Maybe (DJST.Tagged DJST.WriteOnlyKey Bool) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.3>
+       , examplesKey :: Maybe (DJST.Tagged DJST.ExamplesKey [DA.Value]) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.10.4
        }
     -> JsonObjectSchema
 
@@ -150,22 +158,28 @@ instance DA.FromJSON JsonObjectSchema where
     constKey' <- f "const"
     defaultKey' <- f "default"
     return $
-      ammendResult jos (ConstKey <$> constKey') (DefaultKey <$> defaultKey')
+      ammendResult
+        jos
+        (DJST.constKey <$> constKey')
+        (DJST.defaultKey <$> defaultKey')
     where
       extractNullableKey ::
            DHS.HashMap DT.Text DA.Value -> DT.Text -> Parser (Maybe DA.Value)
       extractNullableKey = (DA..:!)
       ammendResult ::
            JsonObjectSchema
-        -> Maybe ConstKey
-        -> Maybe DefaultKey
+        -> Maybe (DJST.Tagged DJST.ConstKey DA.Value)
+        -> Maybe (DJST.Tagged DJST.DefaultKey DA.Value)
         -> JsonObjectSchema
-      ammendResult j c d =
-        j {constKey = fmap constKeyValue c, defaultKey = fmap defaultKeyValue d}
+      ammendResult j c d = j {constKey = c, defaultKey = d}
   parseJSON v = DA.genericParseJSON genericJsonOptions $ fromJsonKeyMangle v
 
 instance DA.ToJSON JsonObjectSchema where
   toJSON = toJsonKeyMangle . DA.genericToJSON genericJsonOptions
+
+instance TQ.Arbitrary JsonObjectSchema where
+  arbitrary = jsonObjectSchemaGen DJSJ.defaultValueGenConfig
+  shrink = TQ.genericShrink
 
 -- | An empty 'JsonObjectSchema'. Modify this value to create the
 -- schema you desire in Haskell code.
@@ -219,28 +233,6 @@ emptyJsonObjectSchema =
     , examplesKey = Nothing
     }
 
--- | Many of the JSON schema types can be either a single JSON value,
--- such as a @string@, or a JSON array of values. This data type
--- encodes this representation.
---
--- Note, it is different than 'NonEmpty' because the 'Some' case might
--- very well be empty, though that is likely a poorly designed schema.
-data OneOrSome a where
-  One :: a -> OneOrSome a
-  Some :: [a] -> OneOrSome a
-
-deriving instance Show a => Show (OneOrSome a)
-
-deriving instance Eq a => Eq (OneOrSome a)
-
-deriving instance Generic (OneOrSome a)
-
-instance DA.FromJSON a => DA.FromJSON (OneOrSome a) where
-  parseJSON = DA.genericParseJSON untaggedJsonOptions
-
-instance DA.ToJSON a => DA.ToJSON (OneOrSome a) where
-  toJSON = DA.genericToJSON untaggedJsonOptions
-
 -- | This data type represents the values of the @dependencies@
 -- property. It varies from the 'OneOrSome' pattern in that the type
 -- in the "One" case would be different than the type in the "Some"
@@ -263,46 +255,8 @@ instance DA.ToJSON Dependency where
 instance DA.FromJSON Dependency where
   parseJSON = DA.genericParseJSON untaggedJsonOptions
 
--- | A newtype for @DT.Text@ values which /should/ represent an [ECMA
--- 262](https://www.ecma-international.org/publications/files/ECMA-ST/Ecma-262.pdf)
--- Regular Expression. This is not validated.
-newtype ECMA262Regex =
-  ECMA262Regex DT.Text
-  deriving (Show, Eq, DA.ToJSON, DA.FromJSON, DA.ToJSONKey, DA.FromJSONKey, Ord)
-
--- | <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.1)>
-newtype ItemsKey =
-  ItemsKey (OneOrSome JsonSchema)
-  deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
-
--- | <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.2>
-newtype AdditionalItemsKey =
-  AdditionalItemsKey (OneOrSome JsonSchema)
-  deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
-
--- | <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.1.1>
-newtype TypeKey =
-  TypeKey (OneOrSome DT.Text)
-  deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
-
-newtype ConstKey = ConstKey
-  { constKeyValue :: DA.Value
-  } deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
-
-newtype DefaultKey = DefaultKey
-  { defaultKeyValue :: DA.Value
-  } deriving (Show, Eq, DA.ToJSON, DA.FromJSON)
-
-genericJsonOptions :: DA.Options
-genericJsonOptions =
-  DA.defaultOptions
-    { DA.unwrapUnaryRecords = True
-    , DA.omitNothingFields = True
-    , DA.allNullaryToStringTag = False
-    }
-
-untaggedJsonOptions :: DA.Options
-untaggedJsonOptions = genericJsonOptions {DA.sumEncoding = DA.UntaggedValue}
+instance TQ.Arbitrary Dependency where
+  arbitrary = TQ.oneof []
 
 -- | A 'NonEmpty' list of pairs which are used to transform the JSON
 -- keys in encoding and decoding to work around conflicts between the
@@ -386,3 +340,141 @@ toJsonKeyMangle = jsonKeyMangle toKeyRemappings
 
 fromJsonKeyMangle :: DA.Value -> DA.Value
 fromJsonKeyMangle = jsonKeyMangle fromKeyRemappings
+
+oneOrSomeGen :: TQ.Gen a -> TQ.Gen (DJST.OneOrSome a)
+oneOrSomeGen a =
+  let a' = scale' (`div` 4) a
+   in TQ.oneof [fmap DJST.One a', DJST.Some <$> TQ.listOf a']
+
+dependencyGen :: TQ.Gen JsonSchema -> TQ.Gen DT.Text -> TQ.Gen Dependency
+dependencyGen js t =
+  TQ.oneof [DependencySchema <$> js, DependencyArray <$> TQ.listOf t]
+
+jsonSchemaGen :: TQ.Gen JsonSchema
+jsonSchemaGen = sized' jsonSchemaGen'
+
+jsonSchemaGen' :: Word -> TQ.Gen JsonSchema
+jsonSchemaGen' n =
+  TQ.oneof
+    [ BooleanSchema <$> jsonBooleanSchemaGen TQ.arbitrary
+    , ObjectSchema <$> jsonObjectSchemaGen' defaultValueGenConfig n
+    ]
+
+jsonBooleanSchemaGen :: TQ.Gen Bool -> TQ.Gen JsonBooleanSchema
+jsonBooleanSchemaGen = fmap JsonBooleanSchema
+
+maybeGen :: TQ.Gen a -> TQ.Gen (Maybe a)
+maybeGen g = TQ.oneof [Just <$> g, pure Nothing]
+
+mapGen' :: Ord a => TQ.Gen a -> TQ.Gen b -> Word -> TQ.Gen (DMS.Map a b)
+mapGen' _ _ 0 = pure DMS.empty
+mapGen' a b _ =
+  fmap DMS.fromList . TQ.listOf $ do
+    key <- a
+    value <- b
+    return (key, value)
+
+jsonObjectSchemaGen :: DJSJ.ValueGenConfig -> TQ.Gen JsonObjectSchema
+jsonObjectSchemaGen = sized' . jsonObjectSchemaGen'
+
+jsonObjectSchemaGen' :: DJSJ.ValueGenConfig -> Word -> TQ.Gen JsonObjectSchema
+jsonObjectSchemaGen' _ 0 = pure emptyJsonObjectSchema
+jsonObjectSchemaGen' cfg n =
+  let recursiveSize = div n 4
+      jsg = jsonSchemaGen' recursiveSize
+   in do schemaRef' <- TQ.arbitrary
+         idRef' <- maybeGen genValidUtf8
+         refRef' <- maybeGen genValidUtf8
+         typeKey' <- maybeGen $ typeKeyGen genValidUtf8
+         enumKey' <- maybeGen . TQ.listOf $ DJSJ.valueGen cfg
+         constKey' <- maybeGen $ DJSJ.valueGen cfg
+         multipleOfKey' <- TQ.arbitrary
+         maximumKey' <- TQ.arbitrary
+         exclusiveMaximumKey' <- TQ.arbitrary
+         minimumKey' <- TQ.arbitrary
+         exclusiveMinimumKey' <- TQ.arbitrary
+         maxLengthKey' <- TQ.arbitrary
+         minLengthKey' <- TQ.arbitrary
+         patternKey' <- maybeGen genValidUtf8
+         itemsKey' <- maybeGen $ itemsKeyGen jsg
+         additionalItemsKey' <- maybeGen $ additionalItemsKeyGen jsg
+         maxItemsKey' <- TQ.arbitrary
+         minItemsKey' <- TQ.arbitrary
+         uniqueItemsKey' <- TQ.arbitrary
+         containsKey' <- maybeGen jsg
+         maxPropertiesKey' <- TQ.arbitrary
+         minPropertiesKey' <- TQ.arbitrary
+         requiredKey' <- maybeGen $ TQ.listOf genValidUtf8
+         propertiesKey' <- maybeGen $ mapGen' genValidUtf8 jsg recursiveSize
+         patternPropertiesKey' <-
+           maybeGen $ mapGen' (ecma262RegexGen genValidUtf8) jsg recursiveSize
+         additionalPropertiesKey' <- maybeGen jsg
+         dependenciesKey' <-
+           maybeGen $
+           mapGen' genValidUtf8 (dependencyGen jsg genValidUtf8) recursiveSize
+         propertyNamesKey' <- maybeGen jsg
+         ifKey' <- maybeGen jsg
+         thenKey' <- maybeGen jsg
+         elseKey' <- maybeGen jsg
+         allOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
+         anyOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
+         oneOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
+         notKey' <- maybeGen jsg
+         formatKey' <- maybeGen genValidUtf8
+         contentEncodingKey' <- maybeGen genValidUtf8
+         contentMediaTypeKey' <- maybeGen genValidUtf8
+         definitionsKey' <- maybeGen $ mapGen' genValidUtf8 jsg recursiveSize
+         titleKey' <- maybeGen genValidUtf8
+         descriptionKey' <- maybeGen genValidUtf8
+         defaultKey' <- maybeGen $ DJSJ.valueGen cfg
+         readOnlyKey' <- TQ.arbitrary
+         writeOnlyKey' <- TQ.arbitrary
+         examplesKey' <- maybeGen $ TQ.listOf (DJSJ.valueGen cfg)
+         return $
+           emptyJsonObjectSchema
+             { schemaRef = schemaRef'
+             , idRef = idRef'
+             , refRef = refRef'
+             , typeKey = typeKey'
+             , enumKey = enumKey'
+             , constKey = constKey'
+             , multipleOfKey = multipleOfKey'
+             , maximumKey = maximumKey'
+             , exclusiveMaximumKey = exclusiveMaximumKey'
+             , minimumKey = minimumKey'
+             , exclusiveMinimumKey = exclusiveMinimumKey'
+             , maxLengthKey = maxLengthKey'
+             , minLengthKey = minLengthKey'
+             , patternKey = patternKey'
+             , itemsKey = itemsKey'
+             , additionalItemsKey = additionalItemsKey'
+             , maxItemsKey = maxItemsKey'
+             , minItemsKey = minItemsKey'
+             , uniqueItemsKey = uniqueItemsKey'
+             , containsKey = containsKey'
+             , maxPropertiesKey = maxPropertiesKey'
+             , minPropertiesKey = minPropertiesKey'
+             , requiredKey = requiredKey'
+             , propertiesKey = propertiesKey'
+             , patternPropertiesKey = patternPropertiesKey'
+             , additionalPropertiesKey = additionalPropertiesKey'
+             , dependenciesKey = dependenciesKey'
+             , propertyNamesKey = propertyNamesKey'
+             , ifKey = ifKey'
+             , thenKey = thenKey'
+             , elseKey = elseKey'
+             , allOfKey = allOfKey'
+             , anyOfKey = anyOfKey'
+             , oneOfKey = oneOfKey'
+             , notKey = notKey'
+             , formatKey = formatKey'
+             , contentEncodingKey = contentEncodingKey'
+             , contentMediaTypeKey = contentMediaTypeKey'
+             , definitionsKey = definitionsKey'
+             , titleKey = titleKey'
+             , descriptionKey = descriptionKey'
+             , defaultKey = defaultKey'
+             , readOnlyKey = readOnlyKey'
+             , writeOnlyKey = writeOnlyKey'
+             , examplesKey = examplesKey'
+             }
