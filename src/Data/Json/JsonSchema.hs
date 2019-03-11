@@ -6,7 +6,7 @@ module Data.Json.JsonSchema
   , emptyJsonObjectSchema
   ) where
 
-import Control.Applicative ((<$>))
+import Control.Applicative (Applicative(..), (<$>), (<*>))
 import Control.Monad (return)
 import Data.Aeson.Types (Parser)
 import Data.Bool (Bool(..))
@@ -15,22 +15,23 @@ import Data.Function (($), (.))
 import Data.Functor (fmap)
 import Data.Int (Int)
 import Data.Json.Schema.AesonSettings (genericJsonOptions, untaggedJsonOptions)
-import Data.Json.Schema.QuickCheckUtilities (sized')
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid ((<>))
 import Data.Ord (Ord)
 import Data.Text as DT
+import Data.Traversable (Traversable(..))
 import Data.Tuple (swap)
 import Data.Word (Word)
 import GHC.Generics (Generic)
-import Prelude (undefined)
+import Prelude (div)
 import Test.QuickCheck.Utf8 (genValidUtf8)
 import Text.Show (Show(..))
 
 import qualified Data.Aeson as DA
 import qualified Data.HashMap.Strict as DHS
 import qualified Data.Json.Schema.JsonGenerators as DJSJ
+import qualified Data.Json.Schema.QuickCheckUtilities as DJSQ
 import qualified Data.Json.Schema.Types as DJST
 import qualified Data.Map.Strict as DMS
 import qualified Test.QuickCheck as TQ
@@ -64,7 +65,11 @@ instance DA.ToJSON JsonSchema where
 
 instance TQ.Arbitrary JsonSchema where
   arbitrary =
-    TQ.oneof [BooleanSchema <$> TQ.arbitrary, ObjectSchema <$> TQ.arbitrary]
+    TQ.oneof
+      [ BooleanSchema <$> TQ.arbitrary
+      , ObjectSchema <$>
+        DJSQ.sized' (jsonObjectSchemaGen' DJSJ.defaultValueGenConfig)
+      ]
   shrink (BooleanSchema b) = BooleanSchema <$> TQ.shrink b
   shrink (ObjectSchema o) = ObjectSchema <$> TQ.shrink o
 
@@ -111,8 +116,8 @@ data JsonObjectSchema where
        , maxLengthKey :: Maybe (DJST.Tagged DJST.MaxLengthKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.1>
        , minLengthKey :: Maybe (DJST.Tagged DJST.MinLengthKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.2>
        , patternKey :: Maybe (DJST.Tagged DJST.PatternKey DT.Text) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.3.3>
-       , itemsKey :: Maybe (DJST.Tagged DJST.ItemsKey (DJST.OneOrSome DT.Text)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.1>
-       , additionalItemsKey :: Maybe (DJST.Tagged DJST.AdditionalItemsKey (DJST.OneOrSome DT.Text)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.2>
+       , itemsKey :: Maybe (DJST.Tagged DJST.ItemsKey (DJST.OneOrSome JsonSchema)) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.1>
+       , additionalItemsKey :: Maybe (DJST.Tagged DJST.AdditionalItemsKey JsonSchema) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.2>
        , maxItemsKey :: Maybe (DJST.Tagged DJST.MaxItemsKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.3>
        , minItemsKey :: Maybe (DJST.Tagged DJST.MinItemsKey Word) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.4>
        , uniqueItemsKey :: Maybe (DJST.Tagged DJST.UniqueItemsKey Bool) -- ^ <https://json-schema.org/latest/json-schema-validation.html#rfc.section.6.4.5>
@@ -177,9 +182,111 @@ instance DA.FromJSON JsonObjectSchema where
 instance DA.ToJSON JsonObjectSchema where
   toJSON = toJsonKeyMangle . DA.genericToJSON genericJsonOptions
 
+shrinkTagged ::
+     (a -> [a])
+  -> (a -> DJST.Tagged b a)
+  -> DJST.Tagged b a
+  -> [DJST.Tagged b a]
+shrinkTagged f tagged v = tagged <$> f (DJST.value v)
+
+shrinkOneOrSome :: (a -> [a]) -> DJST.OneOrSome a -> [DJST.OneOrSome a]
+shrinkOneOrSome f (DJST.One a) = DJST.One <$> f a
+shrinkOneOrSome f (DJST.Some as) = DJST.Some <$> TQ.shrinkList f as
+
+shrinkMaybeOneOrSomeTagged ::
+     (a -> [a])
+  -> (DJST.OneOrSome a -> DJST.Tagged b (DJST.OneOrSome a))
+  -> Maybe (DJST.Tagged b (DJST.OneOrSome a))
+  -> [Maybe (DJST.Tagged b (DJST.OneOrSome a))]
+shrinkMaybeOneOrSomeTagged f h =
+  traverse (fmap h . shrinkOneOrSome f . DJST.value)
+
+shrinkMaybeTaggedText ::
+     (DT.Text -> DJST.Tagged b DT.Text)
+  -> Maybe (DJST.Tagged b DT.Text)
+  -> [Maybe (DJST.Tagged b DT.Text)]
+shrinkMaybeTaggedText f = traverse (shrinkTagged DJSQ.shrinkText f)
+
 instance TQ.Arbitrary JsonObjectSchema where
   arbitrary = jsonObjectSchemaGen DJSJ.defaultValueGenConfig
-  shrink = TQ.genericShrink
+  shrink jos =
+    JsonObjectSchema <$> shrinkMaybeTaggedText DJST.schemaRef (schemaRef jos) <*>
+    shrinkMaybeTaggedText DJST.idRef (idRef jos) <*>
+    shrinkMaybeTaggedText DJST.refRef (refRef jos) <*>
+    shrinkMaybeOneOrSomeTagged DJSQ.shrinkText DJST.typeKey (typeKey jos) <*>
+    traverse
+      (shrinkTagged (TQ.shrinkList DJSJ.shrinkValue) DJST.enumKey)
+      (enumKey jos) <*>
+    traverse (shrinkTagged DJSJ.shrinkValue DJST.constKey) (constKey jos) <*>
+    TQ.shrink (multipleOfKey jos) <*>
+    TQ.shrink (maximumKey jos) <*>
+    TQ.shrink (exclusiveMaximumKey jos) <*>
+    TQ.shrink (minimumKey jos) <*>
+    TQ.shrink (exclusiveMinimumKey jos) <*>
+    TQ.shrink (maxLengthKey jos) <*>
+    TQ.shrink (minLengthKey jos) <*>
+    shrinkMaybeTaggedText DJST.patternKey (patternKey jos) <*>
+    shrinkMaybeOneOrSomeTagged TQ.shrink DJST.itemsKey (itemsKey jos) <*>
+    traverse
+      (shrinkTagged TQ.shrink DJST.additionalItemsKey)
+      (additionalItemsKey jos) <*>
+    TQ.shrink (maxItemsKey jos) <*>
+    TQ.shrink (minItemsKey jos) <*>
+    TQ.shrink (uniqueItemsKey jos) <*>
+    TQ.shrink (containsKey jos) <*>
+    TQ.shrink (maxPropertiesKey jos) <*>
+    TQ.shrink (minPropertiesKey jos) <*>
+    traverse
+      (shrinkTagged (TQ.shrinkList DJSQ.shrinkText) DJST.requiredKey)
+      (requiredKey jos) <*>
+    traverse
+      (shrinkTagged
+         (DJSQ.shrinkMap DJSQ.shrinkText TQ.shrink)
+         DJST.propertiesKey)
+      (propertiesKey jos) <*>
+    traverse
+      (shrinkTagged
+         (DJSQ.shrinkMap
+            (shrinkTagged DJSQ.shrinkText DJST.ecma262Regex)
+            TQ.shrink)
+         DJST.patternPropertiesKey)
+      (patternPropertiesKey jos) <*>
+    TQ.shrink (additionalPropertiesKey jos) <*>
+    traverse
+      (shrinkTagged
+         (DJSQ.shrinkMap DJSQ.shrinkText TQ.shrink)
+         DJST.dependenciesKey)
+      (dependenciesKey jos) <*>
+    TQ.shrink (propertyNamesKey jos) <*>
+    TQ.shrink (ifKey jos) <*>
+    TQ.shrink (thenKey jos) <*>
+    TQ.shrink (elseKey jos) <*>
+    traverse
+      (shrinkTagged (DJSQ.shrinkNonEmpty TQ.shrink) DJST.allOfKey)
+      (allOfKey jos) <*>
+    traverse
+      (shrinkTagged (DJSQ.shrinkNonEmpty TQ.shrink) DJST.anyOfKey)
+      (anyOfKey jos) <*>
+    traverse
+      (shrinkTagged (DJSQ.shrinkNonEmpty TQ.shrink) DJST.oneOfKey)
+      (oneOfKey jos) <*>
+    TQ.shrink (notKey jos) <*>
+    shrinkMaybeTaggedText DJST.formatKey (formatKey jos) <*>
+    shrinkMaybeTaggedText DJST.contentEncodingKey (contentEncodingKey jos) <*>
+    shrinkMaybeTaggedText DJST.contentMediaTypeKey (contentMediaTypeKey jos) <*>
+    traverse
+      (shrinkTagged
+         (DJSQ.shrinkMap DJSQ.shrinkText TQ.shrink)
+         DJST.definitionsKey)
+      (definitionsKey jos) <*>
+    shrinkMaybeTaggedText DJST.titleKey (titleKey jos) <*>
+    shrinkMaybeTaggedText DJST.descriptionKey (descriptionKey jos) <*>
+    traverse (shrinkTagged DJSJ.shrinkValue DJST.defaultKey) (defaultKey jos) <*>
+    TQ.shrink (readOnlyKey jos) <*>
+    TQ.shrink (writeOnlyKey jos) <*>
+    traverse
+      (shrinkTagged (TQ.shrinkList DJSJ.shrinkValue) DJST.examplesKey)
+      (examplesKey jos)
 
 -- | An empty 'JsonObjectSchema'. Modify this value to create the
 -- schema you desire in Haskell code.
@@ -256,7 +363,7 @@ instance DA.FromJSON Dependency where
   parseJSON = DA.genericParseJSON untaggedJsonOptions
 
 instance TQ.Arbitrary Dependency where
-  arbitrary = TQ.oneof []
+  arbitrary = DJSQ.sized' dependencyGen
 
 -- | A 'NonEmpty' list of pairs which are used to transform the JSON
 -- keys in encoding and decoding to work around conflicts between the
@@ -343,21 +450,23 @@ fromJsonKeyMangle = jsonKeyMangle fromKeyRemappings
 
 oneOrSomeGen :: TQ.Gen a -> TQ.Gen (DJST.OneOrSome a)
 oneOrSomeGen a =
-  let a' = scale' (`div` 4) a
+  let a' = DJSQ.scale' (`div` 4) a
    in TQ.oneof [fmap DJST.One a', DJST.Some <$> TQ.listOf a']
 
-dependencyGen :: TQ.Gen JsonSchema -> TQ.Gen DT.Text -> TQ.Gen Dependency
-dependencyGen js t =
-  TQ.oneof [DependencySchema <$> js, DependencyArray <$> TQ.listOf t]
+dependencyGen :: Word -> TQ.Gen Dependency
+dependencyGen n =
+  TQ.oneof
+    [ DependencySchema <$> jsonSchemaGen' n
+    , DependencyArray <$> DJSQ.scale' (`div` 4) (TQ.listOf genValidUtf8)
+    ]
 
-jsonSchemaGen :: TQ.Gen JsonSchema
-jsonSchemaGen = sized' jsonSchemaGen'
-
+-- jsonSchemaGen :: TQ.Gen JsonSchema
+-- jsonSchemaGen = DJSQ.sized' jsonSchemaGen'
 jsonSchemaGen' :: Word -> TQ.Gen JsonSchema
 jsonSchemaGen' n =
   TQ.oneof
     [ BooleanSchema <$> jsonBooleanSchemaGen TQ.arbitrary
-    , ObjectSchema <$> jsonObjectSchemaGen' defaultValueGenConfig n
+    , ObjectSchema <$> jsonObjectSchemaGen' DJSJ.defaultValueGenConfig n
     ]
 
 jsonBooleanSchemaGen :: TQ.Gen Bool -> TQ.Gen JsonBooleanSchema
@@ -375,17 +484,17 @@ mapGen' a b _ =
     return (key, value)
 
 jsonObjectSchemaGen :: DJSJ.ValueGenConfig -> TQ.Gen JsonObjectSchema
-jsonObjectSchemaGen = sized' . jsonObjectSchemaGen'
+jsonObjectSchemaGen = DJSQ.sized' . jsonObjectSchemaGen'
 
 jsonObjectSchemaGen' :: DJSJ.ValueGenConfig -> Word -> TQ.Gen JsonObjectSchema
 jsonObjectSchemaGen' _ 0 = pure emptyJsonObjectSchema
 jsonObjectSchemaGen' cfg n =
   let recursiveSize = div n 4
       jsg = jsonSchemaGen' recursiveSize
-   in do schemaRef' <- TQ.arbitrary
+   in do schemaRef' <- maybeGen genValidUtf8
          idRef' <- maybeGen genValidUtf8
          refRef' <- maybeGen genValidUtf8
-         typeKey' <- maybeGen $ typeKeyGen genValidUtf8
+         typeKey' <- maybeGen $ oneOrSomeGen genValidUtf8
          enumKey' <- maybeGen . TQ.listOf $ DJSJ.valueGen cfg
          constKey' <- maybeGen $ DJSJ.valueGen cfg
          multipleOfKey' <- TQ.arbitrary
@@ -396,8 +505,8 @@ jsonObjectSchemaGen' cfg n =
          maxLengthKey' <- TQ.arbitrary
          minLengthKey' <- TQ.arbitrary
          patternKey' <- maybeGen genValidUtf8
-         itemsKey' <- maybeGen $ itemsKeyGen jsg
-         additionalItemsKey' <- maybeGen $ additionalItemsKeyGen jsg
+         itemsKey' <- maybeGen $ oneOrSomeGen jsg
+         additionalItemsKey' <- maybeGen jsg
          maxItemsKey' <- TQ.arbitrary
          minItemsKey' <- TQ.arbitrary
          uniqueItemsKey' <- TQ.arbitrary
@@ -407,18 +516,18 @@ jsonObjectSchemaGen' cfg n =
          requiredKey' <- maybeGen $ TQ.listOf genValidUtf8
          propertiesKey' <- maybeGen $ mapGen' genValidUtf8 jsg recursiveSize
          patternPropertiesKey' <-
-           maybeGen $ mapGen' (ecma262RegexGen genValidUtf8) jsg recursiveSize
+           maybeGen $ mapGen' genValidUtf8 jsg recursiveSize
          additionalPropertiesKey' <- maybeGen jsg
          dependenciesKey' <-
            maybeGen $
-           mapGen' genValidUtf8 (dependencyGen jsg genValidUtf8) recursiveSize
+           mapGen' genValidUtf8 (dependencyGen recursiveSize) recursiveSize
          propertyNamesKey' <- maybeGen jsg
          ifKey' <- maybeGen jsg
          thenKey' <- maybeGen jsg
          elseKey' <- maybeGen jsg
-         allOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
-         anyOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
-         oneOfKey' <- maybeGen . fmap fromList $ TQ.listOf1 jsg
+         allOfKey' <- maybeGen $ DJSQ.nonEmptyGen jsg
+         anyOfKey' <- maybeGen $ DJSQ.nonEmptyGen jsg
+         oneOfKey' <- maybeGen $ DJSQ.nonEmptyGen jsg
          notKey' <- maybeGen jsg
          formatKey' <- maybeGen genValidUtf8
          contentEncodingKey' <- maybeGen genValidUtf8
@@ -429,15 +538,16 @@ jsonObjectSchemaGen' cfg n =
          defaultKey' <- maybeGen $ DJSJ.valueGen cfg
          readOnlyKey' <- TQ.arbitrary
          writeOnlyKey' <- TQ.arbitrary
-         examplesKey' <- maybeGen $ TQ.listOf (DJSJ.valueGen cfg)
+         examplesKey' <-
+           DJSQ.scale' (`div` 4) . maybeGen $ TQ.listOf (DJSJ.valueGen cfg)
          return $
            emptyJsonObjectSchema
-             { schemaRef = schemaRef'
-             , idRef = idRef'
-             , refRef = refRef'
-             , typeKey = typeKey'
-             , enumKey = enumKey'
-             , constKey = constKey'
+             { schemaRef = DJST.schemaRef <$> schemaRef'
+             , idRef = DJST.idRef <$> idRef'
+             , refRef = DJST.refRef <$> refRef'
+             , typeKey = DJST.typeKey <$> typeKey'
+             , enumKey = DJST.enumKey <$> enumKey'
+             , constKey = DJST.constKey <$> constKey'
              , multipleOfKey = multipleOfKey'
              , maximumKey = maximumKey'
              , exclusiveMaximumKey = exclusiveMaximumKey'
@@ -445,36 +555,42 @@ jsonObjectSchemaGen' cfg n =
              , exclusiveMinimumKey = exclusiveMinimumKey'
              , maxLengthKey = maxLengthKey'
              , minLengthKey = minLengthKey'
-             , patternKey = patternKey'
-             , itemsKey = itemsKey'
-             , additionalItemsKey = additionalItemsKey'
+             , patternKey = DJST.patternKey <$> patternKey'
+             , itemsKey = DJST.itemsKey <$> itemsKey'
+             , additionalItemsKey =
+                 DJST.additionalItemsKey <$> additionalItemsKey'
              , maxItemsKey = maxItemsKey'
              , minItemsKey = minItemsKey'
              , uniqueItemsKey = uniqueItemsKey'
-             , containsKey = containsKey'
+             , containsKey = DJST.containsKey <$> containsKey'
              , maxPropertiesKey = maxPropertiesKey'
              , minPropertiesKey = minPropertiesKey'
-             , requiredKey = requiredKey'
-             , propertiesKey = propertiesKey'
-             , patternPropertiesKey = patternPropertiesKey'
-             , additionalPropertiesKey = additionalPropertiesKey'
-             , dependenciesKey = dependenciesKey'
-             , propertyNamesKey = propertyNamesKey'
-             , ifKey = ifKey'
-             , thenKey = thenKey'
-             , elseKey = elseKey'
-             , allOfKey = allOfKey'
-             , anyOfKey = anyOfKey'
-             , oneOfKey = oneOfKey'
-             , notKey = notKey'
-             , formatKey = formatKey'
-             , contentEncodingKey = contentEncodingKey'
-             , contentMediaTypeKey = contentMediaTypeKey'
-             , definitionsKey = definitionsKey'
-             , titleKey = titleKey'
-             , descriptionKey = descriptionKey'
-             , defaultKey = defaultKey'
-             , readOnlyKey = readOnlyKey'
-             , writeOnlyKey = writeOnlyKey'
-             , examplesKey = examplesKey'
+             , requiredKey = DJST.requiredKey <$> requiredKey'
+             , propertiesKey = DJST.propertiesKey <$> propertiesKey'
+             , patternPropertiesKey =
+                 DJST.patternPropertiesKey <$>
+                 (DMS.mapKeys DJST.ecma262Regex <$> patternPropertiesKey')
+             , additionalPropertiesKey =
+                 DJST.additionalPropertiesKey <$> additionalPropertiesKey'
+             , dependenciesKey = DJST.dependenciesKey <$> dependenciesKey'
+             , propertyNamesKey = DJST.propertyNamesKey <$> propertyNamesKey'
+             , ifKey = DJST.ifKey <$> ifKey'
+             , thenKey = DJST.thenKey <$> thenKey'
+             , elseKey = DJST.elseKey <$> elseKey'
+             , allOfKey = DJST.allOfKey <$> allOfKey'
+             , anyOfKey = DJST.anyOfKey <$> anyOfKey'
+             , oneOfKey = DJST.oneOfKey <$> oneOfKey'
+             , notKey = DJST.notKey <$> notKey'
+             , formatKey = DJST.formatKey <$> formatKey'
+             , contentEncodingKey =
+                 DJST.contentEncodingKey <$> contentEncodingKey'
+             , contentMediaTypeKey =
+                 DJST.contentMediaTypeKey <$> contentMediaTypeKey'
+             , definitionsKey = DJST.definitionsKey <$> definitionsKey'
+             , titleKey = DJST.titleKey <$> titleKey'
+             , descriptionKey = DJST.descriptionKey <$> descriptionKey'
+             , defaultKey = DJST.defaultKey <$> defaultKey'
+             , readOnlyKey = DJST.readOnlyKey <$> readOnlyKey'
+             , writeOnlyKey = DJST.writeOnlyKey <$> writeOnlyKey'
+             , examplesKey = DJST.examplesKey <$> examplesKey'
              }

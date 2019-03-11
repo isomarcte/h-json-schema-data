@@ -9,6 +9,7 @@ module Data.Json.Schema.JsonGenerators
   , objectGen'
   , primitiveValueGen
   , primitiveValueGen'
+  , shrinkValue
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
@@ -17,8 +18,10 @@ import Control.Monad.Reader.Class (MonadReader(..), ask)
 import Data.Bool (Bool(..))
 import Data.Function (($), (.))
 import Data.Functor (fmap)
-import Data.Json.Schema.QuickCheckUtilities (resize', sized')
-import Data.Scientific (Scientific(..), scientific)
+import Data.Json.Schema.QuickCheckUtilities (resize', shrinkText, sized')
+import Data.List (zip)
+import Data.Scientific (Scientific(..), base10Exponent, coefficient, scientific)
+import Data.Tuple (uncurry)
 import Data.Word (Word)
 import Prelude (Integral(..), div)
 import Test.QuickCheck.Utf8 (genValidUtf8)
@@ -93,6 +96,21 @@ primitiveValueGen' n = do
 
 valueGen :: ValueGenConfig -> TQ.Gen DA.Value
 valueGen cfg = sized' $ \w -> valueGen' w cfg
+
+shrinkValue :: DA.Value -> [DA.Value]
+shrinkValue (DA.String t) = DA.String <$> shrinkText t
+shrinkValue (DA.Bool b) = DA.Bool <$> TQ.shrink b
+shrinkValue (DA.Number s) =
+  DA.Number . uncurry scientific <$>
+  zip (TQ.shrink $ coefficient s) (TQ.shrink $ base10Exponent s)
+shrinkValue (DA.Array v) =
+  DA.Array . DV.fromList <$> TQ.shrinkList shrinkValue (DV.toList v)
+shrinkValue (DA.Object hm) =
+  DA.Object . DHS.fromList <$> TQ.shrinkList g (DHS.toList hm)
+  where
+    g :: (DT.Text, DA.Value) -> [(DT.Text, DA.Value)]
+    g (t, v) = zip (shrinkText t) (shrinkValue v)
+shrinkValue _ = []
 
 valueGen' :: MonadReader ValueGenConfig m => Word -> m (TQ.Gen DA.Value)
 valueGen' 0 = primitiveValueGen' 0

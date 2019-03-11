@@ -3,7 +3,6 @@ module Property.JsonSchemaProperties
   ) where
 
 import Data.Function (($), (.))
-import Property.JsonSchemaGenerators ()
 import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.QuickCheck (testProperties)

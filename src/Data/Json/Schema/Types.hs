@@ -1,5 +1,6 @@
 module Data.Json.Schema.Types
   ( Tagged
+  , value
   , OneOrSome(..)
   , ECMA262Regex
   , ecma262Regex
@@ -97,10 +98,12 @@ module Data.Json.Schema.Types
 
 import Control.Applicative ((<$>))
 import Data.Eq (Eq)
+import Data.Foldable (Foldable)
 import Data.Function ((.))
 import Data.Functor (Functor(..))
 import Data.Json.Schema.AesonSettings (untaggedJsonOptions)
 import Data.Ord (Ord)
+import Data.Traversable (Traversable(..))
 import GHC.Generics (Generic)
 import Text.Show (Show(..))
 
@@ -120,6 +123,8 @@ newtype Tagged a b = Tagged
              , Functor
              , DA.FromJSONKey
              , DA.ToJSONKey
+             , Foldable
+             , Traversable
              )
 
 instance TQ.Arbitrary a => TQ.Arbitrary (Tagged b a) where

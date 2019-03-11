@@ -43,11 +43,11 @@ library:
     - Data.Json.Schema.AesonSettings
     - Data.Json.Schema.JsonGenerators
     - Data.Json.Schema.QuickCheckUtilities
-    - Data.Json.Schema.JsonSchemaGenerators
 
 default-extensions:
   - DeriveFunctor
   - DeriveGeneric
+  - DeriveTraversable
   - DisambiguateRecordFields
   - EmptyDataDecls
   - FlexibleContexts

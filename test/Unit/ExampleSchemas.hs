@@ -70,7 +70,7 @@ lookupOrError a m =
 emptyWithTypeKey :: DT.Text -> DJJ.JsonSchema
 emptyWithTypeKey t =
   DJJ.ObjectSchema $
-  DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJST.Tagged $ DJST.One t}
+  DJJ.emptyJsonObjectSchema {DJJ.typeKey = pure . DJST.typeKey $ DJST.One t}
 
 schemas :: IO (NonEmpty (TestComparison DJJ.JsonSchema))
 schemas = fmap f schemaFileMap
@@ -83,68 +83,83 @@ schemas = fmap f schemaFileMap
         , expected =
             DJJ.ObjectSchema $
             DJJ.emptyJsonObjectSchema
-              { DJJ.schemaRef = pure . DJST.Tagged $ jsonSchemaDraft07SchemaRef
-              , DJJ.idRef = pure "http://example.com/product.schema.json"
-              , DJJ.typeKey = pure . DJST.Tagged $ DJST.One "object"
-              , DJJ.titleKey = pure "Product"
-              , DJJ.descriptionKey = pure "A product from Acme's catalog"
+              { DJJ.schemaRef =
+                  pure . DJST.schemaRef $ jsonSchemaDraft07SchemaRef
+              , DJJ.idRef =
+                  pure $ DJST.idRef "http://example.com/product.schema.json"
+              , DJJ.typeKey = pure . DJST.typeKey $ DJST.One "object"
+              , DJJ.titleKey = pure $ DJST.titleKey "Product"
+              , DJJ.descriptionKey =
+                  pure $ DJST.descriptionKey "A product from Acme's catalog"
               , DJJ.propertiesKey =
-                  pure . DMS.fromList $
+                  pure . DJST.propertiesKey . DMS.fromList $
                   [ ( "productId"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.descriptionKey =
-                            pure "The unique identifier for a product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "integer"
+                            pure $
+                            DJST.descriptionKey
+                              "The unique identifier for a product"
+                        , DJJ.typeKey = pure . DJST.typeKey $ DJST.One "integer"
                         })
                   , ( "productName"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
-                        { DJJ.descriptionKey = pure "Name of the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "string"
+                        { DJJ.descriptionKey =
+                            pure $ DJST.descriptionKey "Name of the product"
+                        , DJJ.typeKey = pure . DJST.typeKey $ DJST.One "string"
                         })
                   , ( "price"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
-                        { DJJ.descriptionKey = pure "The price of the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "number"
-                        , DJJ.exclusiveMinimumKey = pure 0
+                        { DJJ.descriptionKey =
+                            pure $
+                            DJST.descriptionKey "The price of the product"
+                        , DJJ.typeKey = pure . DJST.typeKey $ DJST.One "number"
+                        , DJJ.exclusiveMinimumKey =
+                            pure $ DJST.exclusiveMinimumKey 0
                         })
                   , ( "tags"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.itemsKey =
-                            pure . DJJ.ItemsKey . DJST.One $
+                            pure . DJST.itemsKey . DJST.One $
                             emptyWithTypeKey "string"
-                        , DJJ.descriptionKey = pure "Tags for the product"
-                        , DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "array"
-                        , DJJ.minItemsKey = pure 1
-                        , DJJ.uniqueItemsKey = pure True
+                        , DJJ.descriptionKey =
+                            pure $ DJST.descriptionKey "Tags for the product"
+                        , DJJ.typeKey = pure . DJST.typeKey $ DJST.One "array"
+                        , DJJ.minItemsKey = pure $ DJST.minItemsKey 1
+                        , DJJ.uniqueItemsKey = pure $ DJST.uniqueItemsKey True
                         })
                   , ( "dimensions"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
-                        { DJJ.typeKey = pure . DJJ.TypeKey $ DJST.One "object"
+                        { DJJ.typeKey = pure . DJST.typeKey $ DJST.One "object"
                         , DJJ.propertiesKey =
-                            pure . DMS.fromList $
+                            pure . DJST.propertiesKey . DMS.fromList $
                             [ ("length", emptyWithTypeKey "number")
                             , ("width", emptyWithTypeKey "number")
                             , ("height", emptyWithTypeKey "number")
                             ]
-                        , DJJ.requiredKey = pure ["length", "width", "height"]
+                        , DJJ.requiredKey =
+                            pure $
+                            DJST.requiredKey ["length", "width", "height"]
                         })
                   , ( "warehouseLocation"
                     , DJJ.ObjectSchema $
                       DJJ.emptyJsonObjectSchema
                         { DJJ.descriptionKey =
-                            pure
+                            pure $
+                            DJST.descriptionKey
                               "Coordinates of the warehouse where the product is located."
                         , DJJ.refRef =
-                            pure
+                            pure $
+                            DJST.refRef
                               "https://example.com/geographical-location.schema.json"
                         })
                   ]
-              , DJJ.requiredKey = pure ["productId", "productName", "price"]
+              , DJJ.requiredKey =
+                  pure $ DJST.requiredKey ["productId", "productName", "price"]
               }
         } :|
       []
